@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: clearance
+    description: Rights clearance scanning operations
 paths:
   /healthz:
     get:
@@ -24,7 +26,101 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [clearance]
+      summary: List clearance projects
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [clearance]
+      summary: Create a clearance project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+  /projects/{projectId}/assets:
+    post:
+      operationId: uploadAsset
+      tags: [clearance]
+      summary: Add a script, image, or video asset
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssetInput"
+      responses:
+        "201":
+          description: Uploaded asset metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+        "404":
+          description: Project not found
+  /projects/{projectId}/analyze:
+    post:
+      operationId: analyzeProject
+      tags: [clearance]
+      summary: Analyze all project assets with Gemini
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Compiled clearance report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          description: Project has no assets
+        "404":
+          description: Project not found
+  /projects/{projectId}/report:
+    get:
+      operationId: getProjectReport
+      tags: [clearance]
+      summary: Get the latest clearance report
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Latest clearance report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "404":
+          description: Report not found
 components:
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +129,149 @@ components:
           type: string
       required:
         - status
+    ProjectInput:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+      required:
+        - title
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        createdAt:
+          type: string
+        assetCount:
+          type: number
+        detectionCount:
+          type: number
+        reportStatus:
+          type: string
+          enum: [not_started, ready]
+      required:
+        - id
+        - title
+        - createdAt
+        - assetCount
+        - detectionCount
+        - reportStatus
+    AssetInput:
+      type: object
+      properties:
+        filename:
+          type: string
+        type:
+          type: string
+          enum: [script, image, video]
+        mimeType:
+          type: string
+        contentBase64:
+          type: string
+          minLength: 1
+      required:
+        - filename
+        - type
+        - mimeType
+        - contentBase64
+    Asset:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        filename:
+          type: string
+        type:
+          type: string
+          enum: [script, image, video]
+        mimeType:
+          type: string
+        uploadedAt:
+          type: string
+        sizeBytes:
+          type: number
+      required:
+        - id
+        - projectId
+        - filename
+        - type
+        - mimeType
+        - uploadedAt
+        - sizeBytes
+    Detection:
+      type: object
+      properties:
+        id:
+          type: string
+        assetId:
+          type: string
+        category:
+          type: string
+          enum: [brand, logo, celebrity_name, song, existing_ip]
+        name:
+          type: string
+        sourceRef:
+          type: string
+        contextSnippet:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        riskLevel:
+          type: string
+          enum: [low, medium, high]
+        rationale:
+          type: string
+      required:
+        - id
+        - assetId
+        - category
+        - name
+        - sourceRef
+        - contextSnippet
+        - confidence
+        - riskLevel
+        - rationale
+    ReportCounts:
+      type: object
+      properties:
+        low:
+          type: number
+        medium:
+          type: number
+        high:
+          type: number
+      required: [low, medium, high]
+    Report:
+      type: object
+      properties:
+        projectId:
+          type: string
+        generatedAt:
+          type: string
+        summary:
+          type: string
+        counts:
+          $ref: "#/components/schemas/ReportCounts"
+        detections:
+          type: array
+          items:
+            $ref: "#/components/schemas/Detection"
+        analyzedAssets:
+          type: number
+      required:
+        - projectId
+        - generatedAt
+        - summary
+        - counts
+        - detections
+        - analyzedAssets
 

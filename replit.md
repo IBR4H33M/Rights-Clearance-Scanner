@@ -1,15 +1,16 @@
-# [Project name]
+# Rights Clearance Scanner
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+An AI-assisted production desk that scans scripts and visual assets for potential third-party rights references and compiles a risk-scored clearance report.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/api-server run dev` — run the API server
+- `pnpm --filter @workspace/rights-clearance-scanner run dev` — run the web app
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env: `GEMINI_API_KEY` — Google AI Studio key, stored in Replit Secrets
 
 ## Stack
 
@@ -22,15 +23,23 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/rights-clearance-scanner/src/App.tsx` — clearance workspace and report UI
+- `artifacts/rights-clearance-scanner/src/index.css` — visual theme and layout utilities
+- `artifacts/api-server/src/routes/clearance.ts` — project, asset, Gemini analysis, and report API
+- `lib/api-spec/openapi.yaml` — source of truth for the API contract
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The first pass keeps project state in the API process for a fast hackathon demo; uploaded content is base64-encoded in memory and never sent to the browser after upload.
+- Script and visual extraction are separate Gemini prompts, followed by a dedicated risk-scoring Gemini call so evidence and legal-risk reasoning remain distinct.
+- The frontend uses generated OpenAPI React Query hooks so the UI and API share the same request and response shapes.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Create a production review project.
+- Add script, image, or video assets.
+- Run Gemini extraction and risk scoring.
+- Filter and review detections with source references, context, confidence, and rationale.
 
 ## User preferences
 

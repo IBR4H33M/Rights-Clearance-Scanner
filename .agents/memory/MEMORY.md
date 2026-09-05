@@ -1,0 +1,1 @@
+- [OpenAPI integer compatibility](openapi-zod-compatibility.md) — generated integer schemas currently require Zod 4 helpers unavailable in this workspace's Zod 3 runtime.

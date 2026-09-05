@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Rights Clearance Scanner"
+description = "A focused production tool for scanning scripts and visual assets for third-party brands, logos, and IP, then compiling a risk-scored clearance report."
+version = "1.0.0"
+id = "artifacts/rights-clearance-scanner"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20814
+
+[services.development]
+run = "pnpm --filter @workspace/rights-clearance-scanner run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/rights-clearance-scanner", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/rights-clearance-scanner/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20814"
+BASE_PATH = "/"
