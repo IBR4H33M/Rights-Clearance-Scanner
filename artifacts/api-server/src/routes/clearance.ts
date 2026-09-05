@@ -26,6 +26,8 @@ type StoredAsset = {
   mimeType: string;
   uploadedAt: string;
   sizeBytes: number;
+  width: number;
+  height: number;
   contentBase64: string;
 };
 
@@ -39,6 +41,19 @@ type StoredDetection = {
   confidence: number;
   riskLevel: RiskLevel;
   rationale: string;
+  boundingBox: { left: number; top: number; right: number; bottom: number } | null;
+  frameReference: string | null;
+  prominence: "background" | "featured" | null;
+};
+
+type StoredPreview = {
+  assetId: string;
+  filename: string;
+  type: "image" | "video";
+  mimeType: string;
+  dataUrl: string;
+  width: number;
+  height: number;
 };
 
 type StoredReport = {
@@ -48,6 +63,7 @@ type StoredReport = {
   counts: { low: number; medium: number; high: number };
   detections: StoredDetection[];
   analyzedAssets: number;
+  previews: StoredPreview[];
 };
 
 type StoredProject = {
@@ -84,6 +100,30 @@ function parseJson<T>(text: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function clamp(value: number) {
+  return Math.max(0, Math.min(1000, Math.round(value)));
+}
+
+function toPixelBox(
+  value: unknown,
+  width: number,
+  height: number,
+): StoredDetection["boundingBox"] {
+  if (!Array.isArray(value) || value.length !== 4) return null;
+  const [ymin, xmin, ymax, xmax] = value.map(Number);
+  if (![ymin, xmin, ymax, xmax].every(Number.isFinite)) return null;
+  const y1 = clamp(ymin);
+  const x1 = clamp(xmin);
+  const y2 = clamp(ymax);
+  const x2 = clamp(xmax);
+  return {
+    left: (x1 / 1000) * width,
+    top: (y1 / 1000) * height,
+    right: (x2 / 1000) * width,
+    bottom: (y2 / 1000) * height,
+  };
 }
 
 function getProjectId(req: { params: Record<string, string | string[]> }) {
@@ -134,7 +174,7 @@ confidence: number from 0 to 1`;
         role: "user",
         parts: [
           {
-            text: `You are a visual rights-clearance detection agent. Inspect this ${asset.type} and identify visible logos, branded products, trademarks, celebrity likenesses, or recognizable existing IP. Ignore unbranded objects. ${schema}`,
+            text: `You are a visual rights-clearance detection agent. Inspect this ${asset.type} and identify visible third-party brand names, logos, and trademarked products. For videos, report each distinct reference only at the first sequence where it appears so repeated frames do not create duplicate detections. Ignore unbranded objects.\n\nReturn bounding boxes as a JSON array. Never return markdown code fencing.\nEach object must have this exact shape:\n{\n  "box_2d": [ymin, xmin, ymax, xmax],\n  "label": "brand or logo name",\n  "confidence": 0.0-1.0,\n  "prominence": "background" | "featured"\n}\nCoordinates must be integers in the range 0-1000, representing the position on a normalized 1000x1000 version of the image. Limit to 25 objects. If an object appears multiple times, disambiguate labels (for example, "Nike logo - shirt" vs "Nike logo - shoe").`,
           },
           {
             inlineData: {
@@ -218,8 +258,14 @@ router.post("/projects/:projectId/assets", (req, res) => {
     mimeType: parsed.data.mimeType,
     uploadedAt: new Date().toISOString(),
     sizeBytes: Buffer.byteLength(parsed.data.contentBase64, "base64"),
+    width: parsed.data.width ?? 0,
+    height: parsed.data.height ?? 0,
     contentBase64: parsed.data.contentBase64,
   };
+  if (asset.sizeBytes > 18_000_000) {
+    res.status(413).json({ error: "Keep test uploads under 18 MB." });
+    return;
+  }
   project.assets.push(asset);
   res.status(201).json(
     UploadAssetResponse.parse({
@@ -230,6 +276,8 @@ router.post("/projects/:projectId/assets", (req, res) => {
       mimeType: asset.mimeType,
       uploadedAt: asset.uploadedAt,
       sizeBytes: asset.sizeBytes,
+      width: asset.width,
+      height: asset.height,
     }),
   );
 });
@@ -260,19 +308,48 @@ router.post("/projects/:projectId/analyze", async (req, res): Promise<void> => {
       items.map((item) => ({ ...item, assetId: asset.id })),
     );
     const scores = await scoreDetections(allItems);
-    const detections: StoredDetection[] = allItems.map((item, index) => ({
+    const assetsById = new Map(project.assets.map((asset) => [asset.id, asset]));
+    const detections: StoredDetection[] = allItems.map((item, index) => {
+      const asset = assetsById.get(item.assetId);
+      const isVisual = asset?.type === "image" || asset?.type === "video";
+      const label = isVisual ? item.label : item.name;
+      const category = isVisual
+        ? String(label ?? "").toLowerCase().includes("logo")
+          ? "logo"
+          : "brand"
+        : item.category;
+      return {
       id: randomUUID(),
       assetId: String(item.assetId),
-      category: (item.category as Category) ?? "brand",
-      name: String(item.name ?? "Unidentified entity"),
-      sourceRef: String(item.sourceRef ?? "Unspecified reference"),
-      contextSnippet: String(item.contextSnippet ?? "No additional context provided."),
+      category: (category as Category) ?? "brand",
+      name: String(label ?? "Unidentified entity"),
+      sourceRef: isVisual
+        ? asset?.type === "video"
+          ? "First detected sequence"
+          : "Visible in image"
+        : String(item.sourceRef ?? "Unspecified reference"),
+      contextSnippet: isVisual
+        ? `${String(label ?? "Reference")} appears ${item.prominence === "featured" ? "as a featured subject" : "in the background"}.`
+        : String(item.contextSnippet ?? "No additional context provided."),
       confidence: Math.min(1, Math.max(0, Number(item.confidence ?? 0.5))),
       riskLevel: scores[index]?.riskLevel ?? "medium",
       rationale:
         scores[index]?.rationale ??
         "Review this reference with a clearance specialist before release.",
-    }));
+      boundingBox: isVisual
+        ? toPixelBox(item.box_2d, asset?.width ?? 0, asset?.height ?? 0)
+        : null,
+      frameReference:
+        asset?.type === "video"
+          ? "First sequence where this reference appears"
+          : null,
+      prominence: isVisual
+        ? item.prominence === "featured" || item.prominence === "background"
+          ? item.prominence
+          : "featured"
+        : null,
+      };
+    });
     const counts = detections.reduce(
       (acc, detection) => {
         acc[detection.riskLevel] += 1;
@@ -290,6 +367,20 @@ router.post("/projects/:projectId/analyze", async (req, res): Promise<void> => {
       counts,
       detections,
       analyzedAssets: project.assets.length,
+      previews: project.assets
+        .filter(
+          (asset): asset is StoredAsset & { type: "image" | "video" } =>
+            asset.type === "image" || asset.type === "video",
+        )
+        .map((asset) => ({
+          assetId: asset.id,
+          filename: asset.filename,
+          type: asset.type,
+          mimeType: asset.mimeType,
+          dataUrl: `data:${asset.mimeType};base64,${asset.contentBase64}`,
+          width: asset.width,
+          height: asset.height,
+        })),
     };
     res.json(AnalyzeProjectResponse.parse(project.report));
   } catch (error) {

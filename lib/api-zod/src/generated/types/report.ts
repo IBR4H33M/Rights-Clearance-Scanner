@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AssetPreview } from './assetPreview';
 import type { Detection } from './detection';
 import type { ReportCounts } from './reportCounts';
 
@@ -15,4 +16,5 @@ export interface Report {
   counts: ReportCounts;
   detections: Detection[];
   analyzedAssets: number;
+  previews: AssetPreview[];
 }

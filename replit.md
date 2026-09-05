@@ -32,6 +32,7 @@ An AI-assisted production desk that scans scripts and visual assets for potentia
 
 - The first pass keeps project state in the API process for a fast hackathon demo; uploaded content is base64-encoded in memory and never sent to the browser after upload.
 - Script and visual extraction are separate Gemini prompts, followed by a dedicated risk-scoring Gemini call so evidence and legal-risk reasoning remain distinct.
+- Visual detections follow the normalized 0–1000 `box_2d` contract from Gemini; the server converts those coordinates to pixel boxes using the uploaded media dimensions before the report is rendered.
 - The frontend uses generated OpenAPI React Query hooks so the UI and API share the same request and response shapes.
 
 ## Product
@@ -47,7 +48,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Test uploads are capped at 18 MB of decoded media; the JSON request envelope is configured to 25 MB because base64 expands the payload.
 
 ## Pointers
 

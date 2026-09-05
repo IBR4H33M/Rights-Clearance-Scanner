@@ -7,6 +7,8 @@
  */
 export interface HealthStatus {
   status: string;
+  provider: string;
+  detail: string;
 }
 
 export interface ProjectInput {
@@ -49,6 +51,8 @@ export interface AssetInput {
   mimeType: string;
   /** @minLength 1 */
   contentBase64: string;
+  width?: number;
+  height?: number;
 }
 
 export type AssetType = typeof AssetType[keyof typeof AssetType];
@@ -68,6 +72,33 @@ export interface Asset {
   mimeType: string;
   uploadedAt: string;
   sizeBytes: number;
+  width: number;
+  height: number;
+}
+
+export interface BoundingBox {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+export type AssetPreviewType = typeof AssetPreviewType[keyof typeof AssetPreviewType];
+
+
+export const AssetPreviewType = {
+  image: 'image',
+  video: 'video',
+} as const;
+
+export interface AssetPreview {
+  assetId: string;
+  filename: string;
+  type: AssetPreviewType;
+  mimeType: string;
+  dataUrl: string;
+  width: number;
+  height: number;
 }
 
 export type DetectionCategory = typeof DetectionCategory[keyof typeof DetectionCategory];
@@ -90,6 +121,17 @@ export const DetectionRiskLevel = {
   high: 'high',
 } as const;
 
+/**
+ * @nullable
+ */
+export type DetectionProminence = typeof DetectionProminence[keyof typeof DetectionProminence] | null;
+
+
+export const DetectionProminence = {
+  background: 'background',
+  featured: 'featured',
+} as const;
+
 export interface Detection {
   id: string;
   assetId: string;
@@ -104,6 +146,11 @@ export interface Detection {
   confidence: number;
   riskLevel: DetectionRiskLevel;
   rationale: string;
+  boundingBox: BoundingBox | null;
+  /** @nullable */
+  frameReference: string | null;
+  /** @nullable */
+  prominence: DetectionProminence;
 }
 
 export interface ReportCounts {
@@ -119,5 +166,6 @@ export interface Report {
   counts: ReportCounts;
   detections: Detection[];
   analyzedAssets: number;
+  previews: AssetPreview[];
 }
 

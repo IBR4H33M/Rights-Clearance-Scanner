@@ -127,8 +127,11 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+        provider:
+          type: string
+        detail:
+          type: string
+      required: [status, provider, detail]
     ProjectInput:
       type: object
       properties:
@@ -174,6 +177,10 @@ components:
         contentBase64:
           type: string
           minLength: 1
+        width:
+          type: number
+        height:
+          type: number
       required:
         - filename
         - type
@@ -197,6 +204,10 @@ components:
           type: string
         sizeBytes:
           type: number
+        width:
+          type: number
+        height:
+          type: number
       required:
         - id
         - projectId
@@ -205,6 +216,46 @@ components:
         - mimeType
         - uploadedAt
         - sizeBytes
+        - width
+        - height
+    BoundingBox:
+      type: object
+      properties:
+        left:
+          type: number
+        top:
+          type: number
+        right:
+          type: number
+        bottom:
+          type: number
+      required: [left, top, right, bottom]
+    AssetPreview:
+      type: object
+      properties:
+        assetId:
+          type: string
+        filename:
+          type: string
+        type:
+          type: string
+          enum: [image, video]
+        mimeType:
+          type: string
+        dataUrl:
+          type: string
+        width:
+          type: number
+        height:
+          type: number
+      required:
+        - assetId
+        - filename
+        - type
+        - mimeType
+        - dataUrl
+        - width
+        - height
     Detection:
       type: object
       properties:
@@ -230,6 +281,19 @@ components:
           enum: [low, medium, high]
         rationale:
           type: string
+        boundingBox:
+          anyOf:
+            - $ref: "#/components/schemas/BoundingBox"
+            - type: "null"
+        frameReference:
+          type:
+            - string
+            - "null"
+        prominence:
+          type:
+            - string
+            - "null"
+          enum: [background, featured, null]
       required:
         - id
         - assetId
@@ -240,6 +304,9 @@ components:
         - confidence
         - riskLevel
         - rationale
+        - boundingBox
+        - frameReference
+        - prominence
     ReportCounts:
       type: object
       properties:
@@ -267,6 +334,10 @@ components:
             $ref: "#/components/schemas/Detection"
         analyzedAssets:
           type: number
+        previews:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetPreview"
       required:
         - projectId
         - generatedAt
@@ -274,4 +345,5 @@ components:
         - counts
         - detections
         - analyzedAssets
+        - previews
 

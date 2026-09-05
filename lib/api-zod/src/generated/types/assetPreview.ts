@@ -5,16 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AssetType } from './assetType';
+import type { AssetPreviewType } from './assetPreviewType';
 
-export interface Asset {
-  id: string;
-  projectId: string;
+export interface AssetPreview {
+  assetId: string;
   filename: string;
-  type: AssetType;
+  type: AssetPreviewType;
   mimeType: string;
-  uploadedAt: string;
-  sizeBytes: number;
+  dataUrl: string;
   width: number;
   height: number;
 }

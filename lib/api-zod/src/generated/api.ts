@@ -13,7 +13,9 @@ import * as zod from 'zod';
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
-  "status": zod.string()
+  "status": zod.string(),
+  "provider": zod.string(),
+  "detail": zod.string()
 })
 
 
@@ -66,7 +68,9 @@ export const UploadAssetBody = zod.object({
   "filename": zod.string(),
   "type": zod.enum(['script', 'image', 'video']),
   "mimeType": zod.string(),
-  "contentBase64": zod.string().min(1)
+  "contentBase64": zod.string().min(1),
+  "width": zod.number().optional(),
+  "height": zod.number().optional()
 })
 
 export const UploadAssetResponse = zod.object({
@@ -76,7 +80,9 @@ export const UploadAssetResponse = zod.object({
   "type": zod.enum(['script', 'image', 'video']),
   "mimeType": zod.string(),
   "uploadedAt": zod.string(),
-  "sizeBytes": zod.number()
+  "sizeBytes": zod.number(),
+  "width": zod.number(),
+  "height": zod.number()
 })
 
 
@@ -110,9 +116,26 @@ export const AnalyzeProjectResponse = zod.object({
   "contextSnippet": zod.string(),
   "confidence": zod.number().min(analyzeProjectResponseDetectionsItemConfidenceMin).max(analyzeProjectResponseDetectionsItemConfidenceMax),
   "riskLevel": zod.enum(['low', 'medium', 'high']),
-  "rationale": zod.string()
+  "rationale": zod.string(),
+  "boundingBox": zod.union([zod.object({
+  "left": zod.number(),
+  "top": zod.number(),
+  "right": zod.number(),
+  "bottom": zod.number()
+}),zod.null()]),
+  "frameReference": zod.string().nullable(),
+  "prominence": zod.union([zod.literal('background'),zod.literal('featured'),zod.literal(null)]).nullable()
 })),
-  "analyzedAssets": zod.number()
+  "analyzedAssets": zod.number(),
+  "previews": zod.array(zod.object({
+  "assetId": zod.string(),
+  "filename": zod.string(),
+  "type": zod.enum(['image', 'video']),
+  "mimeType": zod.string(),
+  "dataUrl": zod.string(),
+  "width": zod.number(),
+  "height": zod.number()
+}))
 })
 
 
@@ -146,9 +169,26 @@ export const GetProjectReportResponse = zod.object({
   "contextSnippet": zod.string(),
   "confidence": zod.number().min(getProjectReportResponseDetectionsItemConfidenceMin).max(getProjectReportResponseDetectionsItemConfidenceMax),
   "riskLevel": zod.enum(['low', 'medium', 'high']),
-  "rationale": zod.string()
+  "rationale": zod.string(),
+  "boundingBox": zod.union([zod.object({
+  "left": zod.number(),
+  "top": zod.number(),
+  "right": zod.number(),
+  "bottom": zod.number()
+}),zod.null()]),
+  "frameReference": zod.string().nullable(),
+  "prominence": zod.union([zod.literal('background'),zod.literal('featured'),zod.literal(null)]).nullable()
 })),
-  "analyzedAssets": zod.number()
+  "analyzedAssets": zod.number(),
+  "previews": zod.array(zod.object({
+  "assetId": zod.string(),
+  "filename": zod.string(),
+  "type": zod.enum(['image', 'video']),
+  "mimeType": zod.string(),
+  "dataUrl": zod.string(),
+  "width": zod.number(),
+  "height": zod.number()
+}))
 })
 
 

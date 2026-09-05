@@ -6,8 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
-  provider: string;
-  detail: string;
+export interface BoundingBox {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }

@@ -5,7 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BoundingBox } from './boundingBox';
 import type { DetectionCategory } from './detectionCategory';
+import type { DetectionProminence } from './detectionProminence';
 import type { DetectionRiskLevel } from './detectionRiskLevel';
 
 export interface Detection {
@@ -22,4 +24,9 @@ export interface Detection {
   confidence: number;
   riskLevel: DetectionRiskLevel;
   rationale: string;
+  boundingBox: BoundingBox | null;
+  /** @nullable */
+  frameReference: string | null;
+  /** @nullable */
+  prominence: DetectionProminence;
 }

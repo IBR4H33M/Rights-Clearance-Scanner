@@ -53,6 +53,38 @@ const formatDate = (value?: string) =>
     ? new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value))
     : '—';
 
+const getMediaDimensions = (file: File, type: string) =>
+  new Promise<{ width: number; height: number }>((resolve) => {
+    if (type === 'script') {
+      resolve({ width: 0, height: 0 });
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    if (type === 'image') {
+      const image = new Image();
+      image.onload = () => {
+        resolve({ width: image.naturalWidth, height: image.naturalHeight });
+        URL.revokeObjectURL(url);
+      };
+      image.onerror = () => {
+        resolve({ width: 0, height: 0 });
+        URL.revokeObjectURL(url);
+      };
+      image.src = url;
+      return;
+    }
+    const video = document.createElement('video');
+    video.onloadedmetadata = () => {
+      resolve({ width: video.videoWidth, height: video.videoHeight });
+      URL.revokeObjectURL(url);
+    };
+    video.onerror = () => {
+      resolve({ width: 0, height: 0 });
+      URL.revokeObjectURL(url);
+    };
+    video.src = url;
+  });
+
 const categoryLabel = (category: string) =>
   ({ celebrity_name: 'Celebrity name', existing_ip: 'Existing IP', brand: 'Brand', logo: 'Logo', song: 'Song' } as Record<string, string>)[category] ?? category;
 
@@ -70,11 +102,11 @@ function Shell({ children }: { children: ReactNode }) {
             </span>
             <span>
               <span className="block text-sm font-bold tracking-tight">clearance desk</span>
-              <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-sidebar-foreground/55">rights review / 01</span>
+              <span className="retro-kicker text-sidebar-foreground/75">a production review</span>
             </span>
           </Link>
           <nav className="hidden space-y-1 md:mt-14 md:block">
-            <p className="mb-3 px-3 font-mono text-[9px] uppercase tracking-[0.2em] text-sidebar-foreground/40">Workspace</p>
+            <p className="retro-kicker mb-3 px-3 text-sidebar-foreground/65">the desk</p>
             <Link href="/" className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${!isReport ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'}`} data-testid="link-workspace">
               <ScanSearch size={16} /><span>Clearance workspace</span>
             </Link>
@@ -86,9 +118,9 @@ function Shell({ children }: { children: ReactNode }) {
             <div className="border-t border-sidebar-border pt-4">
               <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-sidebar-foreground/50">
                 <span className={`status-dot ${health?.status === 'ok' ? 'bg-emerald-400' : 'bg-sidebar-foreground/35'}`} />
-                {health?.status === 'ok' ? 'analysis service online' : 'service status'}
+                {health?.status === 'ok' ? 'Gemini connected' : 'Gemini needs attention'}
               </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-sidebar-foreground/45">A quiet pass before the cameras roll.</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-sidebar-foreground/55">{health?.detail ?? 'Checking the Gemini connection.'}</p>
             </div>
           </div>
         </div>
@@ -103,7 +135,7 @@ function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; 
     <header className="border-b border-border px-5 py-7 sm:px-8 sm:py-9 lg:px-12">
       <div className="mx-auto flex max-w-[1380px] flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent">{eyebrow}</p>
+          <p className="retro-kicker text-accent">{eyebrow}</p>
           <h1 className="mt-2 text-[clamp(1.8rem,3vw,2.65rem)] font-semibold tracking-[-0.045em]">{title}</h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{description}</p>
         </div>
@@ -202,7 +234,8 @@ function Home() {
           reader.readAsDataURL(file);
         });
         const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'script';
-        await uploadAsset.mutateAsync({ projectId: selectedId, data: { filename: file.name, type, mimeType: file.type || 'application/octet-stream', contentBase64 } });
+        const dimensions = await getMediaDimensions(file, type);
+        await uploadAsset.mutateAsync({ projectId: selectedId, data: { filename: file.name, type, mimeType: file.type || 'application/octet-stream', contentBase64, ...dimensions } });
       }
       await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
     } catch (error) {
@@ -227,14 +260,14 @@ function Home() {
 
   return (
     <div className="min-h-[100dvh]">
-      <PageHeader eyebrow="Clearance workspace / 01" title="Know what needs a call before you shoot." description="Bring in the script, boards, and references. Clearance Desk surfaces the rights questions worth answering first." action={selectedProject ? <Link href={`/report/${selectedProject.id}`} className="inline-flex items-center gap-2 self-start rounded-md border border-border bg-card px-3.5 py-2.5 text-sm font-medium transition-colors hover:bg-muted lg:self-auto" data-testid="link-open-report">Open saved report <ArrowUpRight size={15} /></Link> : null} />
+      <PageHeader eyebrow="The clearance desk" title="Know what needs a call before you shoot." description="Bring in the script, boards, and references. Clearance Desk surfaces the rights questions worth answering first." action={selectedProject ? <Link href={`/report/${selectedProject.id}`} className="inline-flex items-center gap-2 self-start rounded-md border border-border bg-card px-3.5 py-2.5 text-sm font-medium transition-colors hover:bg-muted lg:self-auto" data-testid="link-open-report">Open saved report <ArrowUpRight size={15} /></Link> : null} />
       <div className="mx-auto max-w-[1380px] px-5 py-6 sm:px-8 lg:px-12">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_355px]">
           <div className="space-y-6">
             <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
               <div className="flex flex-col justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-start">
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">01 / Add source material</p>
+                  <p className="retro-kicker text-muted-foreground">Bring in your material</p>
                   <h2 className="mt-2 text-lg font-semibold tracking-tight">Build the review set</h2>
                   <p className="mt-1 text-sm text-muted-foreground">Scripts, reference stills, and cuts are all fair game.</p>
                 </div>
@@ -252,7 +285,7 @@ function Home() {
                     <input type="file" multiple className="sr-only" accept=".pdf,.doc,.docx,.txt,.rtf,image/*,video/*" onChange={handleFiles} data-testid="input-assets" />
                     {uploadAsset.isPending ? <LoaderCircle size={24} className="animate-spin text-accent" /> : <UploadCloud size={24} className="text-accent" />}
                     <span className="mt-3 text-sm font-medium">{uploadAsset.isPending ? 'Adding material to the set…' : 'Drop files here or browse'}</span>
-                    <span className="mt-1 text-xs text-muted-foreground">PDF, DOCX, TXT, JPG, PNG, or MP4</span>
+                   <span className="mt-1 text-xs text-muted-foreground">PDF, DOCX, TXT, JPG, PNG, or MP4 · clips under 18 MB</span>
                   </label>
                   {uploadError && <div className="mt-3 flex items-center gap-2 text-xs text-destructive" data-testid="status-upload-error"><AlertTriangle size={14} />{uploadError}</div>}
                   <div className="mt-5 space-y-2">
@@ -265,7 +298,7 @@ function Home() {
             <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
               <div className="flex flex-col justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-start">
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">02 / Run the pass</p>
+                  <p className="retro-kicker text-muted-foreground">Run the picture</p>
                   <h2 className="mt-2 text-lg font-semibold tracking-tight">Scan for clearance signals</h2>
                   <p className="mt-1 text-sm text-muted-foreground">One pass across every asset. Results stay attached to their source.</p>
                 </div>
@@ -292,7 +325,7 @@ function Home() {
             <section className="rounded-lg border border-border bg-card p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Projects</p>
+                 <p className="retro-kicker text-muted-foreground">Productions</p>
                   <h2 className="mt-2 text-lg font-semibold tracking-tight">Production desk</h2>
                 </div>
                 <span className="font-mono text-xs text-muted-foreground">{projects.length.toString().padStart(2, '0')}</span>
@@ -304,7 +337,7 @@ function Home() {
               </div>
             </section>
             <section className="rounded-lg bg-primary p-5 text-primary-foreground">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/55">A note for review</p>
+               <p className="retro-kicker text-primary-foreground/75">A note from the desk</p>
               <p className="mt-4 text-[1.1rem] leading-snug tracking-tight">A detection is a lead, not a legal conclusion.</p>
               <p className="mt-3 text-xs leading-relaxed text-primary-foreground/60">Use the evidence and rationale to route the right question to production counsel, talent, or a rights holder.</p>
             </section>
@@ -319,7 +352,7 @@ function LatestReport({ report, loading, error, project }: { report?: Report; lo
   return (
     <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4 border-b border-border pb-5">
-        <div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">03 / Latest report</p><h2 className="mt-2 text-lg font-semibold tracking-tight">What needs attention</h2></div>
+        <div><p className="retro-kicker text-muted-foreground">Notes for the cut</p><h2 className="mt-2 text-lg font-semibold tracking-tight">What needs attention</h2></div>
         {report && project && <Link href={`/report/${project.id}`} className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline" data-testid="link-report-details">View details <ArrowUpRight size={13} /></Link>}
       </div>
       {loading ? <div className="space-y-3 py-5"><div className="h-4 w-1/3 animate-pulse rounded bg-muted" /><div className="h-10 w-full animate-pulse rounded bg-muted" /></div> : error ? <div className="flex items-center gap-2 py-6 text-sm text-destructive"><AlertTriangle size={15} />No saved report is available for this project yet.</div> : !report ? <div className="scan-grid mt-5 rounded-md p-8 text-center"><ShieldAlert size={23} className="mx-auto text-muted-foreground" /><p className="mt-3 text-sm font-medium">The report will land here.</p><p className="mt-1 text-xs text-muted-foreground">Run an analysis after adding source material.</p></div> : <ReportSummary report={report} compact />}
@@ -351,23 +384,23 @@ function ReportPage() {
   const filtered = filter === 'all' ? detections : detections.filter((detection) => detection.riskLevel === filter);
   return (
     <div className="min-h-[100dvh]">
-      <PageHeader eyebrow="Saved report / 02" title={project?.title ?? 'Clearance report'} description={reportQuery.data ? `Generated ${formatDate(reportQuery.data.generatedAt)} · ${reportQuery.data.analyzedAssets} assets analyzed` : 'A source-linked view of the latest clearance pass.'} action={<button type="button" onClick={() => setLocation('/')} className="inline-flex items-center gap-2 self-start text-sm font-medium text-muted-foreground hover:text-foreground lg:self-auto" data-testid="button-back-workspace"><ArrowLeft size={15} /> Back to workspace</button>} />
+      <PageHeader eyebrow="The clearance report" title={project?.title ?? 'Clearance report'} description={reportQuery.data ? `Generated ${formatDate(reportQuery.data.generatedAt)} · ${reportQuery.data.analyzedAssets} assets analyzed` : 'A source-linked view of the latest clearance pass.'} action={<button type="button" onClick={() => setLocation('/')} className="inline-flex items-center gap-2 self-start text-sm font-medium text-muted-foreground hover:text-foreground lg:self-auto" data-testid="button-back-workspace"><ArrowLeft size={15} /> Back to workspace</button>} />
       <div className="mx-auto max-w-[1380px] px-5 py-6 sm:px-8 lg:px-12">
         {reportQuery.isLoading ? <LoadingScreen label="Loading report" /> : reportQuery.isError || !reportQuery.data ? <ErrorScreen message="This report is not available yet." onRetry={() => reportQuery.refetch()} backHref="/" /> : (
           <div className="space-y-6">
             <section className="rounded-lg border border-border bg-card p-5 sm:p-7">
               <div className="flex flex-col justify-between gap-5 border-b border-border pb-6 lg:flex-row lg:items-start">
-                <div className="max-w-2xl"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Executive read</p><h2 className="mt-3 text-2xl font-semibold tracking-[-0.035em]">The short version.</h2><p className="mt-3 text-sm leading-relaxed text-muted-foreground">{reportQuery.data.summary}</p></div>
+                <div className="max-w-2xl"><p className="retro-kicker text-accent">A quick read</p><h2 className="mt-3 text-2xl font-semibold tracking-[-0.035em]">The short version.</h2><p className="mt-3 text-sm leading-relaxed text-muted-foreground">{reportQuery.data.summary}</p></div>
                 <div className="grid grid-cols-3 gap-2 lg:min-w-[305px]">{(['high', 'medium', 'low'] as const).map((level) => <div className="bg-muted/65 px-3 py-3" key={level} data-testid={`report-stat-${level}`}><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{level}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{reportQuery.data.counts[level]}</p></div>)}</div>
               </div>
               <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"><span>{reportQuery.data.detections.length} signals detected</span><span>{reportQuery.data.analyzedAssets} source assets</span><span>Pass date {formatDate(reportQuery.data.generatedAt)}</span></div>
             </section>
             <section className="rounded-lg border border-border bg-card">
               <div className="flex flex-col justify-between gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:px-7">
-                <div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Evidence register</p><h2 className="mt-2 text-lg font-semibold tracking-tight">Signals to route</h2></div>
+                <div><p className="retro-kicker text-muted-foreground">The evidence</p><h2 className="mt-2 text-lg font-semibold tracking-tight">Signals to route</h2></div>
                 <div className="flex items-center gap-1 rounded-md bg-muted p-1">{['all', 'high', 'medium', 'low'].map((value) => <button type="button" key={value} onClick={() => setFilter(value)} className={`rounded px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-wider transition-colors ${filter === value ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid={`button-filter-${value}`}>{value}</button>)}</div>
               </div>
-              {filtered.length === 0 ? <div className="p-10 text-center text-sm text-muted-foreground">No detections in this view.</div> : <div className="divide-y divide-border">{filtered.map((detection, index) => <DetectionRow detection={detection} index={index} key={detection.id} />)}</div>}
+              {filtered.length === 0 ? <div className="p-10 text-center text-sm text-muted-foreground">No detections in this view.</div> : <div className="divide-y divide-border">{filtered.map((detection, index) => <DetectionRow detection={detection} previews={reportQuery.data.previews} index={index} key={detection.id} />)}</div>}
             </section>
           </div>
         )}
@@ -376,8 +409,9 @@ function ReportPage() {
   );
 }
 
-function DetectionRow({ detection, index }: { detection: Detection; index: number }) {
+function DetectionRow({ detection, previews, index }: { detection: Detection; previews: Report['previews']; index: number }) {
   const [expanded, setExpanded] = useState(index === 0 && detection.riskLevel === 'high');
+  const preview = previews.find((item) => item.assetId === detection.assetId);
   return (
     <article className="px-5 py-5 sm:px-7" data-testid={`row-detection-${detection.id}`}>
       <button type="button" onClick={() => setExpanded((value) => !value)} className="flex w-full items-start justify-between gap-4 text-left" data-testid={`button-expand-detection-${detection.id}`}>
@@ -387,8 +421,30 @@ function DetectionRow({ detection, index }: { detection: Detection; index: numbe
         </div>
         <div className="flex shrink-0 items-center gap-3"><RiskBadge level={detection.riskLevel} /><ChevronDown size={15} className={`text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} /></div>
       </button>
-      {expanded && <div className="ml-[46px] mt-4 grid gap-4 border-l-2 border-accent/40 pl-4 sm:grid-cols-[1.1fr_1fr] fade-up"><div><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Context</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">“{detection.contextSnippet}”</p></div><div><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Why it matters</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">{detection.rationale}</p></div></div>}
+      {expanded && <div className="ml-[46px] mt-4 grid gap-5 border-l-2 border-accent/40 pl-4 sm:grid-cols-[1.1fr_1fr] fade-up"><div><EvidencePreview detection={detection} preview={preview} /><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Context</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">“{detection.contextSnippet}”</p>{detection.prominence && <p className="mt-3 text-xs text-muted-foreground">Seen as a {detection.prominence} reference.</p>}</div><div><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Why it matters</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">{detection.rationale}</p>{detection.frameReference && <p className="mt-4 text-xs text-muted-foreground">Preview anchored to the {detection.frameReference.toLowerCase()}.</p>}</div></div>}
     </article>
+  );
+}
+
+function EvidencePreview({ detection, preview }: { detection: Detection; preview?: Report['previews'][number] }) {
+  if (!preview) return null;
+  const box = detection.boundingBox;
+  const hasBox = Boolean(box && preview.width > 0 && preview.height > 0);
+  const style = hasBox && box ? {
+    left: `${(box.left / preview.width) * 100}%`,
+    top: `${(box.top / preview.height) * 100}%`,
+    width: `${((box.right - box.left) / preview.width) * 100}%`,
+    height: `${((box.bottom - box.top) / preview.height) * 100}%`,
+  } : undefined;
+  return (
+    <div className="mb-5">
+      <p className="retro-kicker mb-2 text-muted-foreground">Source preview</p>
+      <div className="relative max-w-[460px] overflow-hidden rounded-md bg-primary/10">
+        {preview.type === 'video' ? <video className="block max-h-72 w-full object-contain" src={preview.dataUrl} controls preload="metadata" aria-label={`Preview of ${preview.filename}`} /> : <img className="block max-h-72 w-full object-contain" src={preview.dataUrl} alt={`Preview of ${preview.filename}`} />}
+        {style && <span aria-label={`Bounding box for ${detection.name}`} className="pointer-events-none absolute border-2 border-accent" style={style}><span className="absolute -top-6 left-[-2px] whitespace-nowrap bg-accent px-1.5 py-1 font-mono text-[9px] font-bold text-accent-foreground">{detection.name}</span></span>}
+      </div>
+      <p className="mt-2 text-[11px] text-muted-foreground">{preview.filename}{preview.type === 'video' ? ' · first detected sequence' : ' · detected frame'}</p>
+    </div>
   );
 }
 

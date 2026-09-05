@@ -13,4 +13,6 @@ export interface AssetInput {
   mimeType: string;
   /** @minLength 1 */
   contentBase64: string;
+  width?: number;
+  height?: number;
 }
