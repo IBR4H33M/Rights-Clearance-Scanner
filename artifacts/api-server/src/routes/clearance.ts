@@ -15,6 +15,8 @@ import {
   UploadAssetResponse,
 } from "@workspace/api-zod";
 
+const GEMINI_MODEL = "gemini-3.5-flash-lite";
+
 type AssetType = "script" | "image" | "video";
 type RiskLevel = "low" | "medium" | "high";
 type Category = "brand" | "logo" | "celebrity_name" | "song" | "existing_ip";
@@ -186,7 +188,7 @@ confidence: number from 0 to 1`;
   if (asset.type === "script") {
     const script = Buffer.from(asset.contentBase64, "base64").toString("utf8");
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: [
         {
           role: "user",
@@ -203,7 +205,7 @@ confidence: number from 0 to 1`;
   }
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: GEMINI_MODEL,
     contents: [
       {
         role: "user",
@@ -278,7 +280,7 @@ ${JSON.stringify(detections)}`;
     })),
   ];
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: GEMINI_MODEL,
     contents: [
       {
         role: "user",
