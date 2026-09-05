@@ -55,6 +55,15 @@ const formatDate = (value?: string) =>
     ? new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value))
     : '—';
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as { data?: unknown }).data;
+    if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') return data.error;
+  }
+  return fallback;
+};
+
 const getMediaDimensions = (file: File, type: string) =>
   new Promise<{ width: number; height: number }>((resolve) => {
     if (type === 'script') {
@@ -240,6 +249,7 @@ function Home() {
   const projects = projectsQuery.data ?? [];
   const [selectedId, setSelectedId] = useState<string>();
   const [uploadError, setUploadError] = useState('');
+  const [analysisError, setAnalysisError] = useState('');
   const selectedProject = projects.find((project) => project.id === selectedId);
   const reportQuery = useGetProjectReport(selectedId ?? '', { query: { enabled: Boolean(selectedId && selectedProject?.reportStatus === 'ready'), queryKey: getGetProjectReportQueryKey(selectedId ?? '') } });
   const uploadAsset = useUploadAsset();
@@ -277,11 +287,13 @@ function Home() {
 
   const runAnalysis = () => {
     if (!selectedId || !selectedProject?.assetCount || analyzeProject.isPending) return;
+    setAnalysisError('');
     analyzeProject.mutate({ projectId: selectedId }, {
       onSuccess: (report) => {
         queryClient.setQueryData(getGetProjectReportQueryKey(selectedId), report);
         queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
       },
+      onError: (error) => setAnalysisError(getErrorMessage(error, 'Analysis could not be completed. Try again.')),
     });
   };
 
@@ -374,6 +386,7 @@ function Home() {
                 </div>
                 {analyzeProject.isPending && <div className="h-1 w-16 overflow-hidden rounded bg-accent/20"><div className="pulse-bar h-full origin-left rounded bg-accent" /></div>}
               </div>
+              {analysisError && <div className="mt-3 flex items-start gap-2 rounded-md bg-destructive/10 px-4 py-3 text-xs leading-relaxed text-destructive" data-testid="status-analysis-error"><AlertTriangle size={14} className="mt-0.5 shrink-0" /><span>{analysisError}</span></div>}
             </section>
 
             <LatestReport report={reportQuery.data} loading={reportQuery.isLoading} error={reportQuery.isError} project={selectedProject} />

@@ -115,10 +115,7 @@
     line-height: 1.2;
   }
   .status-dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; }
-  .scan-grid {
-    background-image: linear-gradient(hsl(var(--border) / .32) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border) / .32) 1px, transparent 1px);
-    background-size: 22px 22px;
-  }
+  .scan-grid { background: hsl(var(--muted) / .42); }
   .fade-up { animation: fade-up .35s ease-out both; }
   .pulse-bar { animation: pulse-bar 1.5s ease-in-out infinite; }
 }

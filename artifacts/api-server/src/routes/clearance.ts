@@ -491,6 +491,14 @@ router.post("/projects/:projectId/analyze", async (req, res): Promise<void> => {
     res.json(AnalyzeProjectResponse.parse(project.report));
   } catch (error) {
     req.log.error({ err: error }, "Gemini analysis failed");
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("429") || message.includes("RESOURCE_EXHAUSTED")) {
+      res.status(429).json({
+        error:
+          "Gemini request quota is exhausted for this API key. Wait for the quota reset or check Google AI Studio billing and limits, then retry.",
+      });
+      return;
+    }
     res.status(500).json({
       error: "Gemini analysis failed. Check GEMINI_API_KEY and try again.",
     });
