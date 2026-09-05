@@ -27,34 +27,6 @@ export const ProjectReportStatus = {
   ready: 'ready',
 } as const;
 
-export interface Project {
-  id: string;
-  title: string;
-  createdAt: string;
-  assetCount: number;
-  detectionCount: number;
-  reportStatus: ProjectReportStatus;
-}
-
-export type AssetInputType = typeof AssetInputType[keyof typeof AssetInputType];
-
-
-export const AssetInputType = {
-  script: 'script',
-  image: 'image',
-  video: 'video',
-} as const;
-
-export interface AssetInput {
-  filename: string;
-  type: AssetInputType;
-  mimeType: string;
-  /** @minLength 1 */
-  contentBase64: string;
-  width?: number;
-  height?: number;
-}
-
 export type AssetType = typeof AssetType[keyof typeof AssetType];
 
 
@@ -74,6 +46,37 @@ export interface Asset {
   sizeBytes: number;
   width: number;
   height: number;
+  /** @nullable */
+  previewDataUrl: string | null;
+}
+
+export interface Project {
+  id: string;
+  title: string;
+  createdAt: string;
+  assetCount: number;
+  detectionCount: number;
+  reportStatus: ProjectReportStatus;
+  assets: Asset[];
+}
+
+export type AssetInputType = typeof AssetInputType[keyof typeof AssetInputType];
+
+
+export const AssetInputType = {
+  script: 'script',
+  image: 'image',
+  video: 'video',
+} as const;
+
+export interface AssetInput {
+  filename: string;
+  type: AssetInputType;
+  mimeType: string;
+  /** @minLength 1 */
+  contentBase64: string;
+  width?: number;
+  height?: number;
 }
 
 export interface BoundingBox {
@@ -129,7 +132,43 @@ export type DetectionProminence = typeof DetectionProminence[keyof typeof Detect
 
 export const DetectionProminence = {
   background: 'background',
+  moderate: 'moderate',
   featured: 'featured',
+} as const;
+
+/**
+ * @nullable
+ */
+export type DetectionDuration = typeof DetectionDuration[keyof typeof DetectionDuration] | null;
+
+
+export const DetectionDuration = {
+  brief: 'brief',
+  sustained: 'sustained',
+  recurring: 'recurring',
+} as const;
+
+/**
+ * @nullable
+ */
+export type DetectionSentiment = typeof DetectionSentiment[keyof typeof DetectionSentiment] | null;
+
+
+export const DetectionSentiment = {
+  positive: 'positive',
+  neutral: 'neutral',
+  negative: 'negative',
+} as const;
+
+/**
+ * @nullable
+ */
+export type DetectionNarrativeRole = typeof DetectionNarrativeRole[keyof typeof DetectionNarrativeRole] | null;
+
+
+export const DetectionNarrativeRole = {
+  incidental: 'incidental',
+  referenced_in_dialogue: 'referenced_in_dialogue',
 } as const;
 
 export interface Detection {
@@ -151,6 +190,14 @@ export interface Detection {
   frameReference: string | null;
   /** @nullable */
   prominence: DetectionProminence;
+  /** @nullable */
+  duration: DetectionDuration;
+  /** @nullable */
+  sentiment: DetectionSentiment;
+  /** @nullable */
+  narrativeRole: DetectionNarrativeRole;
+  /** @nullable */
+  visualEvidence: string | null;
 }
 
 export interface ReportCounts {

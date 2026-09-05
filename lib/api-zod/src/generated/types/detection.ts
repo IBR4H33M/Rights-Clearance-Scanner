@@ -7,8 +7,11 @@
  */
 import type { BoundingBox } from './boundingBox';
 import type { DetectionCategory } from './detectionCategory';
+import type { DetectionDuration } from './detectionDuration';
+import type { DetectionNarrativeRole } from './detectionNarrativeRole';
 import type { DetectionProminence } from './detectionProminence';
 import type { DetectionRiskLevel } from './detectionRiskLevel';
+import type { DetectionSentiment } from './detectionSentiment';
 
 export interface Detection {
   id: string;
@@ -29,4 +32,12 @@ export interface Detection {
   frameReference: string | null;
   /** @nullable */
   prominence: DetectionProminence;
+  /** @nullable */
+  duration: DetectionDuration;
+  /** @nullable */
+  sentiment: DetectionSentiment;
+  /** @nullable */
+  narrativeRole: DetectionNarrativeRole;
+  /** @nullable */
+  visualEvidence: string | null;
 }

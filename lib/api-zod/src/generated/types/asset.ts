@@ -17,4 +17,6 @@ export interface Asset {
   sizeBytes: number;
   width: number;
   height: number;
+  /** @nullable */
+  previewDataUrl: string | null;
 }

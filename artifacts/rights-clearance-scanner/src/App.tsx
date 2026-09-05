@@ -24,12 +24,14 @@ import {
   ScanSearch,
   ShieldAlert,
   UploadCloud,
+  X,
 } from 'lucide-react';
 import {
   getGetProjectReportQueryKey,
   getHealthCheckQueryKey,
   getListProjectsQueryKey,
   useAnalyzeProject,
+  useDeleteAsset,
   useCreateProject,
   useGetProjectReport,
   useHealthCheck,
@@ -197,6 +199,33 @@ function FileGlyph({ type, size = 18 }: { type: string; size?: number }) {
   return <FileText size={size} />;
 }
 
+function MediaAssetPreview({ asset, onRemove, removing }: { asset: Project['assets'][number]; onRemove: () => void; removing: boolean }) {
+  if ((asset.type !== 'image' && asset.type !== 'video') || !asset.previewDataUrl) return null;
+  return (
+    <div className="relative pt-4">
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={removing}
+        className="absolute right-1 top-0 z-10 grid size-6 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-80 disabled:opacity-50"
+        aria-label={`Remove ${asset.filename}`}
+        title={`Remove ${asset.filename}`}
+        data-testid={`button-remove-asset-${asset.id}`}
+      >
+        {removing ? <LoaderCircle size={12} className="animate-spin" /> : <X size={13} strokeWidth={2.5} />}
+      </button>
+      <div className="overflow-hidden rounded-md bg-muted" style={asset.width > 0 && asset.height > 0 ? { aspectRatio: `${asset.width} / ${asset.height}` } : undefined}>
+        {asset.type === 'video' ? (
+          <video className="block h-full w-full object-contain" src={asset.previewDataUrl} controls preload="metadata" aria-label={`Preview of ${asset.filename}`} />
+        ) : (
+          <img className="block h-full w-full object-contain" src={asset.previewDataUrl} alt={`Preview of ${asset.filename}`} />
+        )}
+      </div>
+      <p className="mt-2 truncate text-[11px] text-muted-foreground" title={asset.filename}>{asset.filename}</p>
+    </div>
+  );
+}
+
 function RiskBadge({ level }: { level: string }) {
   const styles = {
     high: 'bg-red-100 text-red-800',
@@ -212,8 +241,9 @@ function Home() {
   const [selectedId, setSelectedId] = useState<string>();
   const [uploadError, setUploadError] = useState('');
   const selectedProject = projects.find((project) => project.id === selectedId);
-  const reportQuery = useGetProjectReport(selectedId ?? '', { query: { enabled: Boolean(selectedId), queryKey: getGetProjectReportQueryKey(selectedId ?? '') } });
+  const reportQuery = useGetProjectReport(selectedId ?? '', { query: { enabled: Boolean(selectedId && selectedProject?.reportStatus === 'ready'), queryKey: getGetProjectReportQueryKey(selectedId ?? '') } });
   const uploadAsset = useUploadAsset();
+  const deleteAsset = useDeleteAsset();
   const analyzeProject = useAnalyzeProject();
 
   useEffect(() => {
@@ -288,6 +318,34 @@ function Home() {
                    <span className="mt-1 text-xs text-muted-foreground">PDF, DOCX, TXT, JPG, PNG, or MP4 · clips under 18 MB</span>
                   </label>
                   {uploadError && <div className="mt-3 flex items-center gap-2 text-xs text-destructive" data-testid="status-upload-error"><AlertTriangle size={14} />{uploadError}</div>}
+                   {selectedProject.assets.filter((asset) => asset.type === 'image' || asset.type === 'video').length > 0 && (
+                     <div className="mt-5 border-t border-border pt-5">
+                       <div className="flex items-center justify-between gap-3">
+                         <p className="retro-kicker text-muted-foreground">Stills and cuts on the desk</p>
+                         <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">cross to remove</span>
+                       </div>
+                       <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                         {selectedProject.assets.filter((asset) => asset.type === 'image' || asset.type === 'video').map((asset) => (
+                           <MediaAssetPreview
+                             key={asset.id}
+                             asset={asset}
+                             removing={deleteAsset.isPending && deleteAsset.variables?.assetId === asset.id}
+                             onRemove={() => {
+                               if (!window.confirm(`Remove ${asset.filename} from this review set?`)) return;
+                               const projectId = selectedId;
+                               if (!projectId) return;
+                               deleteAsset.mutate({ projectId, assetId: asset.id }, {
+                                 onSuccess: () => {
+                                   queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+                                   queryClient.invalidateQueries({ queryKey: getGetProjectReportQueryKey(projectId) });
+                                 },
+                               });
+                             }}
+                           />
+                         ))}
+                       </div>
+                     </div>
+                   )}
                   <div className="mt-5 space-y-2">
                     {selectedProject.assetCount === 0 ? <div className="flex items-center gap-3 py-4 text-sm text-muted-foreground"><CircleDashed size={17} />Nothing added yet. The first pass starts with source material.</div> : <div className="flex items-center gap-3 py-3 text-sm text-muted-foreground"><Check size={17} className="text-emerald-700" />{selectedProject.assetCount} source {selectedProject.assetCount === 1 ? 'file is' : 'files are'} ready for analysis.</div>}
                   </div>
@@ -421,7 +479,7 @@ function DetectionRow({ detection, previews, index }: { detection: Detection; pr
         </div>
         <div className="flex shrink-0 items-center gap-3"><RiskBadge level={detection.riskLevel} /><ChevronDown size={15} className={`text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} /></div>
       </button>
-      {expanded && <div className="ml-[46px] mt-4 grid gap-5 border-l-2 border-accent/40 pl-4 sm:grid-cols-[1.1fr_1fr] fade-up"><div><EvidencePreview detection={detection} preview={preview} /><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Context</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">“{detection.contextSnippet}”</p>{detection.prominence && <p className="mt-3 text-xs text-muted-foreground">Seen as a {detection.prominence} reference.</p>}</div><div><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Why it matters</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">{detection.rationale}</p>{detection.frameReference && <p className="mt-4 text-xs text-muted-foreground">Preview anchored to the {detection.frameReference.toLowerCase()}.</p>}</div></div>}
+      {expanded && <div className="ml-[46px] mt-4 grid gap-5 border-l-2 border-accent/40 pl-4 sm:grid-cols-[1.1fr_1fr] fade-up"><div><EvidencePreview detection={detection} preview={preview} /><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Context</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">“{detection.contextSnippet}”</p><div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">{detection.prominence && <span>Prominence: {detection.prominence}</span>}{detection.duration && <span>Duration: {detection.duration}</span>}{detection.sentiment && <span>Sentiment: {detection.sentiment}</span>}{detection.narrativeRole && <span>Role: {detection.narrativeRole}</span>}</div>{detection.visualEvidence && <p className="mt-4 text-xs leading-relaxed text-muted-foreground"><span className="font-medium text-foreground">Visual evidence:</span> {detection.visualEvidence}</p>}</div><div><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Why it matters</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">{detection.rationale}</p>{detection.frameReference && <p className="mt-4 text-xs text-muted-foreground">Preview anchored to the {detection.frameReference.toLowerCase()}.</p>}</div></div>}
     </article>
   );
 }
@@ -439,9 +497,9 @@ function EvidencePreview({ detection, preview }: { detection: Detection; preview
   return (
     <div className="mb-5">
       <p className="retro-kicker mb-2 text-muted-foreground">Source preview</p>
-      <div className="relative max-w-[460px] overflow-hidden rounded-md bg-primary/10">
-        {preview.type === 'video' ? <video className="block max-h-72 w-full object-contain" src={preview.dataUrl} controls preload="metadata" aria-label={`Preview of ${preview.filename}`} /> : <img className="block max-h-72 w-full object-contain" src={preview.dataUrl} alt={`Preview of ${preview.filename}`} />}
-        {style && <span aria-label={`Bounding box for ${detection.name}`} className="pointer-events-none absolute border-2 border-accent" style={style}><span className="absolute -top-6 left-[-2px] whitespace-nowrap bg-accent px-1.5 py-1 font-mono text-[9px] font-bold text-accent-foreground">{detection.name}</span></span>}
+      <div className="relative max-w-[460px] overflow-hidden rounded-md bg-primary/10" style={preview.width > 0 && preview.height > 0 ? { aspectRatio: `${preview.width} / ${preview.height}` } : undefined}>
+        {preview.type === 'video' ? <video className="block h-full w-full object-contain" src={preview.dataUrl} controls preload="metadata" aria-label={`Preview of ${preview.filename}`} /> : <img className="block h-full w-full object-contain" src={preview.dataUrl} alt={`Preview of ${preview.filename}`} />}
+        {style && <span aria-label={`Bounding box for ${detection.name}`} className="pointer-events-none absolute border border-emerald-500" style={style}><span className="absolute -top-5 left-[-1px] whitespace-nowrap bg-emerald-600 px-1.5 py-0.5 font-mono text-[9px] font-bold text-white">{detection.name}</span></span>}
       </div>
       <p className="mt-2 text-[11px] text-muted-foreground">{preview.filename}{preview.type === 'video' ? ' · first detected sequence' : ' · detected frame'}</p>
     </div>

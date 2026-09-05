@@ -14,5 +14,6 @@ export type DetectionProminence = typeof DetectionProminence[keyof typeof Detect
 
 export const DetectionProminence = {
   background: 'background',
+  moderate: 'moderate',
   featured: 'featured',
 } as const;

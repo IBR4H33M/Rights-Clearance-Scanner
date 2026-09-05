@@ -28,7 +28,19 @@ export const ListProjectsResponseItem = zod.object({
   "createdAt": zod.string(),
   "assetCount": zod.number(),
   "detectionCount": zod.number(),
-  "reportStatus": zod.enum(['not_started', 'ready'])
+  "reportStatus": zod.enum(['not_started', 'ready']),
+  "assets": zod.array(zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "filename": zod.string(),
+  "type": zod.enum(['script', 'image', 'video']),
+  "mimeType": zod.string(),
+  "uploadedAt": zod.string(),
+  "sizeBytes": zod.number(),
+  "width": zod.number(),
+  "height": zod.number(),
+  "previewDataUrl": zod.string().nullable()
+}))
 })
 export const ListProjectsResponse = zod.array(ListProjectsResponseItem)
 
@@ -50,7 +62,19 @@ export const CreateProjectResponse = zod.object({
   "createdAt": zod.string(),
   "assetCount": zod.number(),
   "detectionCount": zod.number(),
-  "reportStatus": zod.enum(['not_started', 'ready'])
+  "reportStatus": zod.enum(['not_started', 'ready']),
+  "assets": zod.array(zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "filename": zod.string(),
+  "type": zod.enum(['script', 'image', 'video']),
+  "mimeType": zod.string(),
+  "uploadedAt": zod.string(),
+  "sizeBytes": zod.number(),
+  "width": zod.number(),
+  "height": zod.number(),
+  "previewDataUrl": zod.string().nullable()
+}))
 })
 
 
@@ -82,8 +106,20 @@ export const UploadAssetResponse = zod.object({
   "uploadedAt": zod.string(),
   "sizeBytes": zod.number(),
   "width": zod.number(),
-  "height": zod.number()
+  "height": zod.number(),
+  "previewDataUrl": zod.string().nullable()
 })
+
+
+/**
+ * @summary Remove an uploaded asset from a clearance project
+ */
+export const DeleteAssetParams = zod.object({
+  "projectId": zod.coerce.string(),
+  "assetId": zod.coerce.string()
+})
+
+export const DeleteAssetResponse = zod.void()
 
 
 /**
@@ -124,7 +160,11 @@ export const AnalyzeProjectResponse = zod.object({
   "bottom": zod.number()
 }),zod.null()]),
   "frameReference": zod.string().nullable(),
-  "prominence": zod.union([zod.literal('background'),zod.literal('featured'),zod.literal(null)]).nullable()
+  "prominence": zod.union([zod.literal('background'),zod.literal('moderate'),zod.literal('featured'),zod.literal(null)]).nullable(),
+  "duration": zod.union([zod.literal('brief'),zod.literal('sustained'),zod.literal('recurring'),zod.literal(null)]).nullable(),
+  "sentiment": zod.union([zod.literal('positive'),zod.literal('neutral'),zod.literal('negative'),zod.literal(null)]).nullable(),
+  "narrativeRole": zod.union([zod.literal('incidental'),zod.literal('referenced_in_dialogue'),zod.literal(null)]).nullable(),
+  "visualEvidence": zod.string().nullable()
 })),
   "analyzedAssets": zod.number(),
   "previews": zod.array(zod.object({
@@ -177,7 +217,11 @@ export const GetProjectReportResponse = zod.object({
   "bottom": zod.number()
 }),zod.null()]),
   "frameReference": zod.string().nullable(),
-  "prominence": zod.union([zod.literal('background'),zod.literal('featured'),zod.literal(null)]).nullable()
+  "prominence": zod.union([zod.literal('background'),zod.literal('moderate'),zod.literal('featured'),zod.literal(null)]).nullable(),
+  "duration": zod.union([zod.literal('brief'),zod.literal('sustained'),zod.literal('recurring'),zod.literal(null)]).nullable(),
+  "sentiment": zod.union([zod.literal('positive'),zod.literal('neutral'),zod.literal('negative'),zod.literal(null)]).nullable(),
+  "narrativeRole": zod.union([zod.literal('incidental'),zod.literal('referenced_in_dialogue'),zod.literal(null)]).nullable(),
+  "visualEvidence": zod.string().nullable()
 })),
   "analyzedAssets": zod.number(),
   "previews": zod.array(zod.object({

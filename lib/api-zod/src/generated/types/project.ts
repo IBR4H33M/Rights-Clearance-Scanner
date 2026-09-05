@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { Asset } from './asset';
 import type { ProjectReportStatus } from './projectReportStatus';
 
 export interface Project {
@@ -14,4 +15,5 @@ export interface Project {
   assetCount: number;
   detectionCount: number;
   reportStatus: ProjectReportStatus;
+  assets: Asset[];
 }

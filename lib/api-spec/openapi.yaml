@@ -79,6 +79,19 @@ paths:
                 $ref: "#/components/schemas/Asset"
         "404":
           description: Project not found
+  /projects/{projectId}/assets/{assetId}:
+    delete:
+      operationId: deleteAsset
+      tags: [clearance]
+      summary: Remove an uploaded asset from a clearance project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/AssetId"
+      responses:
+        "204":
+          description: Asset removed
+        "404":
+          description: Project or asset not found
   /projects/{projectId}/analyze:
     post:
       operationId: analyzeProject
@@ -121,6 +134,12 @@ components:
       required: true
       schema:
         type: string
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     HealthStatus:
       type: object
@@ -157,6 +176,10 @@ components:
         reportStatus:
           type: string
           enum: [not_started, ready]
+        assets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
       required:
         - id
         - title
@@ -164,6 +187,7 @@ components:
         - assetCount
         - detectionCount
         - reportStatus
+        - assets
     AssetInput:
       type: object
       properties:
@@ -208,6 +232,8 @@ components:
           type: number
         height:
           type: number
+        previewDataUrl:
+          type: ["string", "null"]
       required:
         - id
         - projectId
@@ -218,6 +244,7 @@ components:
         - sizeBytes
         - width
         - height
+        - previewDataUrl
     BoundingBox:
       type: object
       properties:
@@ -293,7 +320,26 @@ components:
           type:
             - string
             - "null"
-          enum: [background, featured, null]
+          enum: [background, moderate, featured, null]
+        duration:
+          type:
+            - string
+            - "null"
+          enum: [brief, sustained, recurring, null]
+        sentiment:
+          type:
+            - string
+            - "null"
+          enum: [positive, neutral, negative, null]
+        narrativeRole:
+          type:
+            - string
+            - "null"
+          enum: [incidental, referenced_in_dialogue, null]
+        visualEvidence:
+          type:
+            - string
+            - "null"
       required:
         - id
         - assetId
@@ -307,6 +353,10 @@ components:
         - boundingBox
         - frameReference
         - prominence
+        - duration
+        - sentiment
+        - narrativeRole
+        - visualEvidence
     ReportCounts:
       type: object
       properties:
