@@ -445,14 +445,14 @@ function ReportPage() {
           <div className="space-y-6">
             <section className="rounded-lg bg-card p-5 sm:p-7">
               <div className="flex flex-col justify-between gap-5 pb-6 lg:flex-row lg:items-start">
-                <div className="max-w-2xl"><p className="retro-kicker text-accent">A quick read</p><h2 className="mt-3 text-2xl font-semibold tracking-[-0.035em]">The short version.</h2><p className="mt-3 text-sm leading-relaxed text-muted-foreground">{reportQuery.data.summary}</p></div>
+                <div className="max-w-2xl"><p className="text-sm leading-relaxed text-muted-foreground">{reportQuery.data.summary}</p></div>
                 <div className="grid grid-cols-3 gap-2 lg:min-w-[305px]">{(['high', 'medium', 'low'] as const).map((level) => <div className="bg-muted/65 px-3 py-3" key={level} data-testid={`report-stat-${level}`}><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{level}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{reportQuery.data.counts[level]}</p></div>)}</div>
               </div>
               <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"><span>{reportQuery.data.detections.length} signals detected</span><span>{reportQuery.data.analyzedAssets} source assets</span><span>Pass date {formatDate(reportQuery.data.generatedAt)}</span></div>
             </section>
             <section className="rounded-lg bg-card">
               <div className="flex flex-col justify-between gap-4 px-5 py-5 sm:flex-row sm:items-center sm:px-7">
-                <div><p className="retro-kicker text-muted-foreground">The evidence</p><h2 className="mt-2 text-lg font-semibold tracking-tight">Signals to route</h2></div>
+                <div><h2 className="text-lg font-semibold tracking-tight">Detailed analysis of potential issues</h2></div>
                 <div className="flex items-center gap-1 rounded-md bg-muted p-1">{['all', 'high', 'medium', 'low'].map((value) => <button type="button" key={value} onClick={() => setFilter(value)} className={`rounded px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-wider transition-colors ${filter === value ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid={`button-filter-${value}`}>{value}</button>)}</div>
               </div>
               {filtered.length === 0 ? <div className="p-10 text-center text-sm text-muted-foreground">No detections in this view.</div> : <div>{filtered.map((detection, index) => <DetectionRow detection={detection} previews={reportQuery.data.previews} index={index} key={detection.id} />)}</div>}
