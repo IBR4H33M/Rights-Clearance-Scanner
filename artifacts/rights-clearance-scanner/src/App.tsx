@@ -206,7 +206,7 @@ function MediaAssetPreview({ asset, onRemove, removing }: { asset: Project['asse
         type="button"
         onClick={onRemove}
         disabled={removing}
-        className="absolute right-1 top-0 z-10 grid size-6 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-80 disabled:opacity-50"
+        className="absolute right-1 top-0 z-10 grid size-6 place-items-center rounded-full bg-red-100 text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50"
         aria-label={`Remove ${asset.filename}`}
         title={`Remove ${asset.filename}`}
         data-testid={`button-remove-asset-${asset.id}`}
@@ -313,7 +313,7 @@ function Home() {
                 </div>
               ) : (
                 <>
-                   <label className={`mt-5 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-md bg-accent/[0.035] px-5 py-7 text-center transition-colors hover:bg-accent/[0.07] ${uploadAsset.isPending ? 'pointer-events-none opacity-70' : ''}`} data-testid="dropzone-assets">
+                    <label className={`mt-5 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-accent/40 bg-accent/[0.035] px-5 py-7 text-center transition-colors hover:bg-accent/[0.07] ${uploadAsset.isPending ? 'pointer-events-none opacity-70' : ''}`} data-testid="dropzone-assets">
                     <input type="file" multiple className="sr-only" accept=".pdf,.doc,.docx,.txt,.rtf,image/*,video/*" onChange={handleFiles} data-testid="input-assets" />
                     {uploadAsset.isPending ? <LoaderCircle size={24} className="animate-spin text-accent" /> : <UploadCloud size={24} className="text-accent" />}
                     <span className="mt-3 text-sm font-medium">{uploadAsset.isPending ? 'Adding material to the set…' : 'Drop files here or browse'}</span>
