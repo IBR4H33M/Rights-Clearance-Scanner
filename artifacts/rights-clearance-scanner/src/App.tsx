@@ -352,31 +352,26 @@ function Home() {
                   </div>
                 </>
               )}
-            </section>
-
-            <section className="rounded-lg bg-card p-5 sm:p-6">
-              <div className="flex flex-col justify-between gap-4 pb-5 sm:flex-row sm:items-start">
-                <div>
-                  <p className="mt-1 text-sm text-muted-foreground">One pass across every asset. Results stay attached to their source.</p>
-                </div>
+              <div className="mt-8">
                 <button type="button" onClick={runAnalysis} disabled={!selectedProject?.assetCount || analyzeProject.isPending} className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40" data-testid="button-run-analysis">
                   {analyzeProject.isPending ? <><LoaderCircle size={15} className="animate-spin" /> Analyzing…</> : <><Play size={14} fill="currentColor" /> Run analysis</>}
                 </button>
-              </div>
-              <div className="mt-5 flex items-center gap-4 rounded-md bg-muted/55 px-4 py-3">
+                <div className="mt-5 flex items-center gap-4 rounded-md bg-muted/55 px-4 py-3">
                 <div className={`grid size-9 place-items-center rounded-full ${analyzeProject.isPending ? 'bg-accent text-accent-foreground' : selectedProject?.reportStatus === 'ready' ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
                   {analyzeProject.isPending ? <Activity size={17} className="animate-pulse" /> : selectedProject?.reportStatus === 'ready' ? <Check size={17} /> : <ScanSearch size={17} />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{analyzeProject.isPending ? 'Reading the review set' : selectedProject?.reportStatus === 'ready' ? 'Latest pass is ready' : 'Waiting for a first pass'}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{analyzeProject.isPending ? 'This can take a moment. Keep this desk open.' : selectedProject?.reportStatus === 'ready' ? `${selectedProject.detectionCount} signals found across your sources.` : 'Add at least one asset to enable analysis.'}</p>
+                  <p className="text-sm font-medium">{analyzeProject.isPending ? 'Reading the review set' : selectedProject?.reportStatus === 'ready' ? 'Scan complete' : 'Waiting for a first pass'}</p>
+                  {analyzeProject.isPending && <p className="mt-0.5 text-xs text-muted-foreground">This can take a moment. Keep this desk open.</p>}
+                  {!analyzeProject.isPending && selectedProject?.reportStatus !== 'ready' && <p className="mt-0.5 text-xs text-muted-foreground">Add at least one asset to enable analysis.</p>}
                 </div>
                 {analyzeProject.isPending && <div className="h-1 w-16 overflow-hidden rounded bg-accent/20"><div className="pulse-bar h-full origin-left rounded bg-accent" /></div>}
+                </div>
+                {analysisError && <div className="mt-3 flex items-start gap-2 rounded-md bg-destructive/10 px-4 py-3 text-xs leading-relaxed text-destructive" data-testid="status-analysis-error"><AlertTriangle size={14} className="mt-0.5 shrink-0" /><span>{analysisError}</span></div>}
               </div>
-              {analysisError && <div className="mt-3 flex items-start gap-2 rounded-md bg-destructive/10 px-4 py-3 text-xs leading-relaxed text-destructive" data-testid="status-analysis-error"><AlertTriangle size={14} className="mt-0.5 shrink-0" /><span>{analysisError}</span></div>}
-            </section>
 
             <LatestReport report={reportQuery.data} loading={reportQuery.isLoading} error={reportQuery.isError} project={selectedProject} />
+            </section>
           </div>
 
           <aside className="space-y-6">
@@ -400,14 +395,14 @@ function Home() {
 
 function LatestReport({ report, loading, error, project }: { report?: Report; loading: boolean; error: boolean; project?: Project }) {
   return (
-    <section className="rounded-lg bg-card p-5 sm:p-6">
+    <div className="mt-8">
       <div className="flex items-start justify-between gap-4 pb-5">
         <div><h2 className="text-lg font-semibold tracking-tight">Scan Results</h2></div>
         {report && project && <Link href={`/report/${project.id}`} className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline" data-testid="link-report-details">View details <ArrowUpRight size={13} /></Link>}
       </div>
       {loading ? <div className="space-y-3 py-5"><div className="h-4 w-1/3 animate-pulse rounded bg-muted" /><div className="h-10 w-full animate-pulse rounded bg-muted" /></div> : error ? <div className="flex items-center gap-2 py-6 text-sm text-destructive"><AlertTriangle size={15} />No saved report is available for this project yet.</div> : !report ? <div className="scan-grid mt-5 rounded-md p-8 text-center"><ShieldAlert size={23} className="mx-auto text-muted-foreground" /><p className="mt-3 text-sm font-medium">The report will land here.</p><p className="mt-1 text-xs text-muted-foreground">Run an analysis after adding source material.</p></div> : <ReportSummary report={report} compact />}
       {project && <div className="mt-6 flex justify-end"><Link href={`/report/${project.id}`} className="inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90" data-testid="link-open-report">Open saved report <ArrowUpRight size={15} /></Link></div>}
-    </section>
+    </div>
   );
 }
 
