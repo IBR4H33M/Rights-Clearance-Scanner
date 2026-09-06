@@ -128,14 +128,14 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
+function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description?: string; action?: ReactNode }) {
   return (
     <header className="px-5 py-7 sm:px-8 sm:py-9 lg:px-12">
       <div className="mx-auto flex max-w-[1380px] flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
           <p className="retro-kicker text-accent">{eyebrow}</p>
           <h1 className="mt-2 text-[clamp(1.8rem,3vw,2.65rem)] font-semibold tracking-[-0.045em]">{title}</h1>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{description}</p>
+          {description && <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{description}</p>}
         </div>
         {action}
       </div>
@@ -292,16 +292,14 @@ function Home() {
 
   return (
     <div className="min-h-[100dvh]">
-      <PageHeader eyebrow="RightScan" title="Know what needs a call before you shoot." description="Bring in the script, boards, and references. RightScan surfaces the rights questions worth answering first." />
+      <PageHeader eyebrow="RightScan" title="Know what needs a call before you shoot." />
       <div className="mx-auto max-w-[1380px] px-5 py-6 sm:px-8 lg:px-12">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_355px]">
           <div className="space-y-6">
             <section className="rounded-lg bg-card p-5 sm:p-6">
               <div className="flex flex-col justify-between gap-4 pb-5 sm:flex-row sm:items-start">
                 <div>
-                  <p className="retro-kicker text-muted-foreground">Bring in your material</p>
-                  <h2 className="mt-2 text-lg font-semibold tracking-tight">Build the review set</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Scripts, reference stills, and cuts are all fair game.</p>
+                  <h2 className="text-lg font-semibold tracking-tight">Upload your assets</h2>
                 </div>
                 {selectedProject && <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{selectedProject.assetCount} {selectedProject.assetCount === 1 ? 'asset' : 'assets'} in set</span>}
               </div>
@@ -323,7 +321,7 @@ function Home() {
                    {selectedProject.assets.filter((asset) => asset.type === 'image' || asset.type === 'video').length > 0 && (
                      <div className="mt-5 pt-5">
                        <div className="flex items-center justify-between gap-3">
-                         <p className="retro-kicker text-muted-foreground">Stills and cuts in the set</p>
+                          <p className="retro-kicker text-muted-foreground">Uploaded assets</p>
                        </div>
                        <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
                          {selectedProject.assets.filter((asset) => asset.type === 'image' || asset.type === 'video').map((asset) => (
@@ -397,19 +395,23 @@ function LatestReport({ report, loading, error, project }: { report?: Report; lo
         <div><h2 className="text-lg font-semibold tracking-tight">Scan Results</h2></div>
         {report && project && <Link href={`/report/${project.id}`} className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline" data-testid="link-report-details">View details <ArrowUpRight size={13} /></Link>}
       </div>
-      {loading ? <div className="space-y-3 py-5"><div className="h-4 w-1/3 animate-pulse rounded bg-muted" /><div className="h-10 w-full animate-pulse rounded bg-muted" /></div> : error ? <div className="flex items-center gap-2 py-6 text-sm text-destructive"><AlertTriangle size={15} />No saved report is available for this project yet.</div> : !report ? <div className="scan-grid mt-5 rounded-md p-8 text-center"><ShieldAlert size={23} className="mx-auto text-muted-foreground" /><p className="mt-3 text-sm font-medium">The report will land here.</p><p className="mt-1 text-xs text-muted-foreground">Run an analysis after adding source material.</p></div> : <ReportSummary report={report} compact />}
+      {loading ? <div className="space-y-3 py-5"><div className="h-4 w-1/3 animate-pulse rounded bg-muted" /><div className="h-10 w-full animate-pulse rounded bg-muted" /></div> : error ? <div className="flex items-center gap-2 py-6 text-sm text-destructive"><AlertTriangle size={15} />No saved report is available for this project yet.</div> : !report ? <div className="scan-grid mt-5 rounded-md p-8 text-center"><ShieldAlert size={23} className="mx-auto text-muted-foreground" /><p className="mt-3 text-sm font-medium">The report will land here.</p><p className="mt-1 text-xs text-muted-foreground">Run an analysis after adding source material.</p></div> : <ReportSummary report={report} />}
       {project && <div className="mt-6 flex justify-end"><Link href={`/report/${project.id}`} className="inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90" data-testid="link-open-report">Open saved report <ArrowUpRight size={15} /></Link></div>}
     </div>
   );
 }
 
-function ReportSummary({ report, compact = false }: { report: Report; compact?: boolean }) {
-  const total = report.counts.low + report.counts.medium + report.counts.high;
+function ReportSummary({ report }: { report: Report }) {
   const categoryCounts = report.detections.reduce<Record<string, number>>((counts, detection) => {
     counts[detection.category] = (counts[detection.category] ?? 0) + 1;
     return counts;
   }, {});
   const categoryEntries = Object.entries(categoryCounts).sort(([, a], [, b]) => b - a);
+  const levelStyles = {
+    high: 'text-red-700',
+    medium: 'text-amber-700',
+    low: 'text-emerald-700',
+  } as const;
   return (
     <div className="mt-5">
       <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground" data-testid="text-report-summary">{report.summary}</p>
@@ -417,10 +419,18 @@ function ReportSummary({ report, compact = false }: { report: Report; compact?: 
         <span className="font-medium text-foreground">Detected:</span>
         {categoryEntries.length > 0 ? categoryEntries.map(([category, count]) => <span className="rounded-md bg-muted/65 px-2.5 py-1.5 text-muted-foreground" key={category}>{count} {categoryLabel(category)}{count === 1 ? '' : 's'}</span>) : <span className="text-muted-foreground">No included signals</span>}
       </div>
-      <div className={`mt-5 grid gap-2 ${compact ? 'grid-cols-3' : 'grid-cols-3 sm:grid-cols-3'}`}>
-        {(['high', 'medium', 'low'] as const).map((level) => <div className="rounded-md bg-muted/65 p-3" key={level} data-testid={`stat-${level}-count`}><div className="flex items-center justify-between"><span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{level}</span><span className={`status-dot ${level === 'high' ? 'bg-red-700' : level === 'medium' ? 'bg-amber-600' : 'bg-emerald-700'}`} /></div><p className="mt-2 text-xl font-semibold tracking-tight">{report.counts[level]}</p></div>)}
+      <div className="mt-5 overflow-hidden rounded-md bg-muted/45" data-testid="summary-risk-table">
+        <div className="grid grid-cols-[1fr_auto] gap-4 px-4 py-2.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+          <span>Risk level</span>
+          <span>References detected</span>
+        </div>
+        {(['high', 'medium', 'low'] as const).map((level) => (
+          <div className="grid grid-cols-[1fr_auto] items-center gap-4 border-t border-background/50 bg-muted/65 px-4 py-3" key={level} data-testid={`stat-${level}-count`}>
+            <span className={`font-semibold uppercase tracking-wide ${levelStyles[level]}`}>{level}</span>
+            <span className="text-lg font-semibold tracking-tight">{report.counts[level]}</span>
+          </div>
+        ))}
       </div>
-      <div className="mt-4 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-muted-foreground"><span>{total} detected signals</span><span>{report.analyzedAssets} assets analyzed</span></div>
     </div>
   );
 }
