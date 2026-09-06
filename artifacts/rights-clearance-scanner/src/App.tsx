@@ -28,13 +28,11 @@ import {
 } from 'lucide-react';
 import {
   getGetProjectReportQueryKey,
-  getHealthCheckQueryKey,
   getListProjectsQueryKey,
   useAnalyzeProject,
   useDeleteAsset,
   useCreateProject,
   useGetProjectReport,
-  useHealthCheck,
   useListProjects,
   useUploadAsset,
 } from '@workspace/api-client-react';
@@ -101,7 +99,6 @@ const categoryLabel = (category: string) =>
 
 function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const { data: health } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), staleTime: 60000 } });
   const isReport = location.startsWith('/report/');
   return (
     <div className="min-h-[100dvh] bg-background text-foreground md:grid md:grid-cols-[238px_1fr]">
@@ -112,12 +109,11 @@ function Shell({ children }: { children: ReactNode }) {
               <Clapperboard size={19} strokeWidth={2.2} />
             </span>
             <span>
-              <span className="block text-sm font-bold tracking-tight">clearance desk</span>
+              <span className="block text-sm font-bold tracking-tight">RightScan</span>
               <span className="retro-kicker text-sidebar-foreground/75">a production review</span>
             </span>
           </Link>
           <nav className="hidden space-y-1 md:mt-14 md:block">
-            <p className="retro-kicker mb-3 px-3 text-sidebar-foreground/65">the desk</p>
             <Link href="/" className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${!isReport ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'}`} data-testid="link-workspace">
               <ScanSearch size={16} /><span>Clearance workspace</span>
             </Link>
@@ -125,15 +121,6 @@ function Shell({ children }: { children: ReactNode }) {
               <FileText size={16} /><span>Latest report</span>
             </Link>
           </nav>
-          <div className="hidden md:block md:absolute md:bottom-5 md:left-5 md:right-5">
-            <div className="border-t border-sidebar-border pt-4">
-              <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-sidebar-foreground/50">
-                <span className={`status-dot ${health?.status === 'ok' ? 'bg-emerald-400' : 'bg-sidebar-foreground/35'}`} />
-                {health?.status === 'ok' ? 'Gemini connected' : 'Gemini needs attention'}
-              </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-sidebar-foreground/55">{health?.detail ?? 'Checking the Gemini connection.'}</p>
-            </div>
-          </div>
         </div>
       </aside>
       <main className="min-w-0">{children}</main>
@@ -143,7 +130,7 @@ function Shell({ children }: { children: ReactNode }) {
 
 function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
   return (
-    <header className="border-b border-border px-5 py-7 sm:px-8 sm:py-9 lg:px-12">
+    <header className="px-5 py-7 sm:px-8 sm:py-9 lg:px-12">
       <div className="mx-auto flex max-w-[1380px] flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
           <p className="retro-kicker text-accent">{eyebrow}</p>
@@ -169,16 +156,19 @@ function ProjectPicker({ projects, selectedId, onSelect, onCreated }: { projects
     });
   };
   return (
-    <div className="relative">
-      <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-md border border-sidebar-border bg-sidebar-accent/45 px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent" data-testid="button-project-picker">
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-medium">{selected?.title ?? 'Select a project'}</span>
-          <span className="font-mono text-[9px] uppercase tracking-wider text-sidebar-foreground/45">{selected ? `${selected.assetCount} assets · ${selected.detectionCount} findings` : 'No project selected'}</span>
-        </span>
+    <div className="relative space-y-2">
+      {selected && (
+        <div className="rounded-md bg-sidebar-accent px-3 py-2.5" data-testid="current-project">
+          <span className="block truncate text-sm font-medium">{selected.title}</span>
+          <span className="font-mono text-[9px] uppercase tracking-wider text-sidebar-foreground/55">{selected.assetCount} assets · {selected.detectionCount} findings</span>
+        </div>
+      )}
+      <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-md bg-sidebar-accent/45 px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent" data-testid="button-project-picker">
+        <span className="min-w-0 text-sm font-medium">{selected ? 'Select another project' : 'Select a project'}</span>
         <ChevronDown size={15} className={`shrink-0 text-sidebar-foreground/55 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-md border border-sidebar-border bg-sidebar p-1.5">
+        <div className="absolute left-0 right-0 top-full z-30 mt-2 isolate rounded-md bg-sidebar p-1.5 shadow-2xl">
           <div className="max-h-56 overflow-auto">
             {projects.map((project) => (
               <button type="button" key={project.id} onClick={() => { onSelect(project.id); setOpen(false); }} className={`flex w-full items-center justify-between rounded px-2.5 py-2 text-left text-sm ${project.id === selectedId ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/75 hover:bg-sidebar-accent'}`} data-testid={`button-project-${project.id}`}>
@@ -187,7 +177,7 @@ function ProjectPicker({ projects, selectedId, onSelect, onCreated }: { projects
               </button>
             ))}
           </div>
-          <div className="mt-1 border-t border-sidebar-border pt-1">
+          <div className="mt-1 pt-1">
             {open && !createProject.isPending && (
               <div className="flex gap-1">
                 <input value={title} onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && submit()} placeholder="New project title" className="min-w-0 flex-1 rounded bg-sidebar-accent px-2.5 py-2 text-xs text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/35 focus:ring-1 focus:ring-sidebar-primary" data-testid="input-new-project-title" />
@@ -302,12 +292,12 @@ function Home() {
 
   return (
     <div className="min-h-[100dvh]">
-      <PageHeader eyebrow="The clearance desk" title="Know what needs a call before you shoot." description="Bring in the script, boards, and references. Clearance Desk surfaces the rights questions worth answering first." action={selectedProject ? <Link href={`/report/${selectedProject.id}`} className="inline-flex items-center gap-2 self-start rounded-md border border-border bg-card px-3.5 py-2.5 text-sm font-medium transition-colors hover:bg-muted lg:self-auto" data-testid="link-open-report">Open saved report <ArrowUpRight size={15} /></Link> : null} />
+      <PageHeader eyebrow="RightScan" title="Know what needs a call before you shoot." description="Bring in the script, boards, and references. RightScan surfaces the rights questions worth answering first." />
       <div className="mx-auto max-w-[1380px] px-5 py-6 sm:px-8 lg:px-12">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_355px]">
           <div className="space-y-6">
-            <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
-              <div className="flex flex-col justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-start">
+            <section className="rounded-lg bg-card p-5 sm:p-6">
+              <div className="flex flex-col justify-between gap-4 pb-5 sm:flex-row sm:items-start">
                 <div>
                   <p className="retro-kicker text-muted-foreground">Bring in your material</p>
                   <h2 className="mt-2 text-lg font-semibold tracking-tight">Build the review set</h2>
@@ -323,7 +313,7 @@ function Home() {
                 </div>
               ) : (
                 <>
-                  <label className={`mt-5 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-accent/50 bg-accent/[0.035] px-5 py-7 text-center transition-colors hover:bg-accent/[0.07] ${uploadAsset.isPending ? 'pointer-events-none opacity-70' : ''}`} data-testid="dropzone-assets">
+                   <label className={`mt-5 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-md bg-accent/[0.035] px-5 py-7 text-center transition-colors hover:bg-accent/[0.07] ${uploadAsset.isPending ? 'pointer-events-none opacity-70' : ''}`} data-testid="dropzone-assets">
                     <input type="file" multiple className="sr-only" accept=".pdf,.doc,.docx,.txt,.rtf,image/*,video/*" onChange={handleFiles} data-testid="input-assets" />
                     {uploadAsset.isPending ? <LoaderCircle size={24} className="animate-spin text-accent" /> : <UploadCloud size={24} className="text-accent" />}
                     <span className="mt-3 text-sm font-medium">{uploadAsset.isPending ? 'Adding material to the set…' : 'Drop files here or browse'}</span>
@@ -331,10 +321,9 @@ function Home() {
                   </label>
                   {uploadError && <div className="mt-3 flex items-center gap-2 text-xs text-destructive" data-testid="status-upload-error"><AlertTriangle size={14} />{uploadError}</div>}
                    {selectedProject.assets.filter((asset) => asset.type === 'image' || asset.type === 'video').length > 0 && (
-                     <div className="mt-5 border-t border-border pt-5">
+                     <div className="mt-5 pt-5">
                        <div className="flex items-center justify-between gap-3">
-                         <p className="retro-kicker text-muted-foreground">Stills and cuts on the desk</p>
-                         <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">cross to remove</span>
+                         <p className="retro-kicker text-muted-foreground">Stills and cuts in the set</p>
                        </div>
                        <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
                          {selectedProject.assets.filter((asset) => asset.type === 'image' || asset.type === 'video').map((asset) => (
@@ -365,11 +354,9 @@ function Home() {
               )}
             </section>
 
-            <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
-              <div className="flex flex-col justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-start">
+            <section className="rounded-lg bg-card p-5 sm:p-6">
+              <div className="flex flex-col justify-between gap-4 pb-5 sm:flex-row sm:items-start">
                 <div>
-                  <p className="retro-kicker text-muted-foreground">Run the picture</p>
-                  <h2 className="mt-2 text-lg font-semibold tracking-tight">Scan for clearance signals</h2>
                   <p className="mt-1 text-sm text-muted-foreground">One pass across every asset. Results stay attached to their source.</p>
                 </div>
                 <button type="button" onClick={runAnalysis} disabled={!selectedProject?.assetCount || analyzeProject.isPending} className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40" data-testid="button-run-analysis">
@@ -393,22 +380,19 @@ function Home() {
           </div>
 
           <aside className="space-y-6">
-            <section className="rounded-lg border border-border bg-card p-5">
+            <section className="rounded-lg bg-card p-5">
               <div className="flex items-center justify-between">
                 <div>
-                 <p className="retro-kicker text-muted-foreground">Productions</p>
-                  <h2 className="mt-2 text-lg font-semibold tracking-tight">Production desk</h2>
+                  <h2 className="text-lg font-semibold tracking-tight">{selectedProject ? 'Current project' : 'Select a Project'}</h2>
                 </div>
-                <span className="font-mono text-xs text-muted-foreground">{projects.length.toString().padStart(2, '0')}</span>
               </div>
               <div className="mt-5"><ProjectPicker projects={projects} selectedId={selectedId} onSelect={setSelectedId} onCreated={(project) => { setSelectedId(project.id); queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() }); }} /></div>
-              {projects.length === 0 && <div className="mt-4 rounded-md bg-muted/60 p-4 text-sm text-muted-foreground"><p className="font-medium text-foreground">No productions yet</p><p className="mt-1 text-xs leading-relaxed">Use the picker to create a project for this clearance pass.</p></div>}
-              <div className="mt-5 space-y-1 border-t border-border pt-4">
+              {projects.length > 0 && <div className="mt-5 space-y-1 pt-4">
                 {projects.slice(0, 5).map((project) => <button type="button" key={project.id} onClick={() => setSelectedId(project.id)} className={`flex w-full items-center justify-between rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-muted ${project.id === selectedId ? 'bg-muted' : ''}`} data-testid={`button-sidebar-project-${project.id}`}><span className="flex min-w-0 items-center gap-2.5"><span className={`status-dot ${project.reportStatus === 'ready' ? 'bg-emerald-600' : 'bg-muted-foreground/40'}`} /><span className="truncate text-sm">{project.title}</span></span><span className="font-mono text-[10px] text-muted-foreground">{project.detectionCount}</span></button>)}
-              </div>
+              </div>}
             </section>
             <section className="rounded-lg bg-primary p-5 text-primary-foreground">
-               <p className="retro-kicker text-primary-foreground/75">A note from the desk</p>
+                <p className="retro-kicker text-primary-foreground/75">A note from RightScan</p>
               <p className="mt-4 text-[1.1rem] leading-snug tracking-tight">A detection is a lead, not a legal conclusion.</p>
               <p className="mt-3 text-xs leading-relaxed text-primary-foreground/60">Use the evidence and rationale to route the right question to production counsel, talent, or a rights holder.</p>
             </section>
@@ -421,21 +405,31 @@ function Home() {
 
 function LatestReport({ report, loading, error, project }: { report?: Report; loading: boolean; error: boolean; project?: Project }) {
   return (
-    <section className="rounded-lg border border-border bg-card p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-4 border-b border-border pb-5">
-        <div><p className="retro-kicker text-muted-foreground">Notes for the cut</p><h2 className="mt-2 text-lg font-semibold tracking-tight">What needs attention</h2></div>
+    <section className="rounded-lg bg-card p-5 sm:p-6">
+      <div className="flex items-start justify-between gap-4 pb-5">
+        <div><h2 className="text-lg font-semibold tracking-tight">Scan Results</h2></div>
         {report && project && <Link href={`/report/${project.id}`} className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline" data-testid="link-report-details">View details <ArrowUpRight size={13} /></Link>}
       </div>
       {loading ? <div className="space-y-3 py-5"><div className="h-4 w-1/3 animate-pulse rounded bg-muted" /><div className="h-10 w-full animate-pulse rounded bg-muted" /></div> : error ? <div className="flex items-center gap-2 py-6 text-sm text-destructive"><AlertTriangle size={15} />No saved report is available for this project yet.</div> : !report ? <div className="scan-grid mt-5 rounded-md p-8 text-center"><ShieldAlert size={23} className="mx-auto text-muted-foreground" /><p className="mt-3 text-sm font-medium">The report will land here.</p><p className="mt-1 text-xs text-muted-foreground">Run an analysis after adding source material.</p></div> : <ReportSummary report={report} compact />}
+      {project && <div className="mt-6 flex justify-end"><Link href={`/report/${project.id}`} className="inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90" data-testid="link-open-report">Open saved report <ArrowUpRight size={15} /></Link></div>}
     </section>
   );
 }
 
 function ReportSummary({ report, compact = false }: { report: Report; compact?: boolean }) {
   const total = report.counts.low + report.counts.medium + report.counts.high;
+  const categoryCounts = report.detections.reduce<Record<string, number>>((counts, detection) => {
+    counts[detection.category] = (counts[detection.category] ?? 0) + 1;
+    return counts;
+  }, {});
+  const categoryEntries = Object.entries(categoryCounts).sort(([, a], [, b]) => b - a);
   return (
     <div className="mt-5">
       <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground" data-testid="text-report-summary">{report.summary}</p>
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs" data-testid="summary-detection-types">
+        <span className="font-medium text-foreground">Detected:</span>
+        {categoryEntries.length > 0 ? categoryEntries.map(([category, count]) => <span className="rounded-md bg-muted/65 px-2.5 py-1.5 text-muted-foreground" key={category}>{count} {categoryLabel(category)}{count === 1 ? '' : 's'}</span>) : <span className="text-muted-foreground">No included signals</span>}
+      </div>
       <div className={`mt-5 grid gap-2 ${compact ? 'grid-cols-3' : 'grid-cols-3 sm:grid-cols-3'}`}>
         {(['high', 'medium', 'low'] as const).map((level) => <div className="rounded-md bg-muted/65 p-3" key={level} data-testid={`stat-${level}-count`}><div className="flex items-center justify-between"><span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{level}</span><span className={`status-dot ${level === 'high' ? 'bg-red-700' : level === 'medium' ? 'bg-amber-600' : 'bg-emerald-700'}`} /></div><p className="mt-2 text-xl font-semibold tracking-tight">{report.counts[level]}</p></div>)}
       </div>
@@ -455,23 +449,23 @@ function ReportPage() {
   const filtered = filter === 'all' ? detections : detections.filter((detection) => detection.riskLevel === filter);
   return (
     <div className="min-h-[100dvh]">
-      <PageHeader eyebrow="The clearance report" title={project?.title ?? 'Clearance report'} description={reportQuery.data ? `Generated ${formatDate(reportQuery.data.generatedAt)} · ${reportQuery.data.analyzedAssets} assets analyzed` : 'A source-linked view of the latest clearance pass.'} action={<button type="button" onClick={() => setLocation('/')} className="inline-flex items-center gap-2 self-start text-sm font-medium text-muted-foreground hover:text-foreground lg:self-auto" data-testid="button-back-workspace"><ArrowLeft size={15} /> Back to workspace</button>} />
+      <PageHeader eyebrow="RightScan report" title={project?.title ?? 'Clearance report'} description={reportQuery.data ? `Generated ${formatDate(reportQuery.data.generatedAt)} · ${reportQuery.data.analyzedAssets} assets analyzed` : 'A source-linked view of the latest clearance pass.'} action={<button type="button" onClick={() => setLocation('/')} className="inline-flex items-center gap-2 self-start text-sm font-medium text-muted-foreground hover:text-foreground lg:self-auto" data-testid="button-back-workspace"><ArrowLeft size={15} /> Back to workspace</button>} />
       <div className="mx-auto max-w-[1380px] px-5 py-6 sm:px-8 lg:px-12">
         {reportQuery.isLoading ? <LoadingScreen label="Loading report" /> : reportQuery.isError || !reportQuery.data ? <ErrorScreen message="This report is not available yet." onRetry={() => reportQuery.refetch()} backHref="/" /> : (
           <div className="space-y-6">
-            <section className="rounded-lg border border-border bg-card p-5 sm:p-7">
-              <div className="flex flex-col justify-between gap-5 border-b border-border pb-6 lg:flex-row lg:items-start">
+            <section className="rounded-lg bg-card p-5 sm:p-7">
+              <div className="flex flex-col justify-between gap-5 pb-6 lg:flex-row lg:items-start">
                 <div className="max-w-2xl"><p className="retro-kicker text-accent">A quick read</p><h2 className="mt-3 text-2xl font-semibold tracking-[-0.035em]">The short version.</h2><p className="mt-3 text-sm leading-relaxed text-muted-foreground">{reportQuery.data.summary}</p></div>
                 <div className="grid grid-cols-3 gap-2 lg:min-w-[305px]">{(['high', 'medium', 'low'] as const).map((level) => <div className="bg-muted/65 px-3 py-3" key={level} data-testid={`report-stat-${level}`}><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{level}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{reportQuery.data.counts[level]}</p></div>)}</div>
               </div>
               <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"><span>{reportQuery.data.detections.length} signals detected</span><span>{reportQuery.data.analyzedAssets} source assets</span><span>Pass date {formatDate(reportQuery.data.generatedAt)}</span></div>
             </section>
-            <section className="rounded-lg border border-border bg-card">
-              <div className="flex flex-col justify-between gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:px-7">
+            <section className="rounded-lg bg-card">
+              <div className="flex flex-col justify-between gap-4 px-5 py-5 sm:flex-row sm:items-center sm:px-7">
                 <div><p className="retro-kicker text-muted-foreground">The evidence</p><h2 className="mt-2 text-lg font-semibold tracking-tight">Signals to route</h2></div>
                 <div className="flex items-center gap-1 rounded-md bg-muted p-1">{['all', 'high', 'medium', 'low'].map((value) => <button type="button" key={value} onClick={() => setFilter(value)} className={`rounded px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-wider transition-colors ${filter === value ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid={`button-filter-${value}`}>{value}</button>)}</div>
               </div>
-              {filtered.length === 0 ? <div className="p-10 text-center text-sm text-muted-foreground">No detections in this view.</div> : <div className="divide-y divide-border">{filtered.map((detection, index) => <DetectionRow detection={detection} previews={reportQuery.data.previews} index={index} key={detection.id} />)}</div>}
+              {filtered.length === 0 ? <div className="p-10 text-center text-sm text-muted-foreground">No detections in this view.</div> : <div>{filtered.map((detection, index) => <DetectionRow detection={detection} previews={reportQuery.data.previews} index={index} key={detection.id} />)}</div>}
             </section>
           </div>
         )}
@@ -492,7 +486,7 @@ function DetectionRow({ detection, previews, index }: { detection: Detection; pr
         </div>
         <div className="flex shrink-0 items-center gap-3"><RiskBadge level={detection.riskLevel} /><ChevronDown size={15} className={`text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} /></div>
       </button>
-      {expanded && <div className="ml-[46px] mt-4 grid gap-5 border-l-2 border-accent/40 pl-4 sm:grid-cols-[1.1fr_1fr] fade-up"><div><EvidencePreview detection={detection} preview={preview} /><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Context</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">“{detection.contextSnippet}”</p><div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">{detection.prominence && <span>Prominence: {detection.prominence}</span>}{detection.duration && <span>Duration: {detection.duration}</span>}{detection.sentiment && <span>Sentiment: {detection.sentiment}</span>}{detection.narrativeRole && <span>Role: {detection.narrativeRole}</span>}</div>{detection.visualEvidence && <p className="mt-4 text-xs leading-relaxed text-muted-foreground"><span className="font-medium text-foreground">Visual evidence:</span> {detection.visualEvidence}</p>}</div><div><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Why it matters</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">{detection.rationale}</p>{detection.frameReference && <p className="mt-4 text-xs text-muted-foreground">Preview anchored to the {detection.frameReference.toLowerCase()}.</p>}</div></div>}
+      {expanded && <div className="ml-[46px] mt-4 grid gap-5 pl-4 sm:grid-cols-[1.1fr_1fr] fade-up"><div><EvidencePreview detection={detection} preview={preview} /><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Context</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">“{detection.contextSnippet}”</p><div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">{detection.prominence && <span>Prominence: {detection.prominence}</span>}{detection.duration && <span>Duration: {detection.duration}</span>}{detection.sentiment && <span>Sentiment: {detection.sentiment}</span>}{detection.narrativeRole && <span>Role: {detection.narrativeRole}</span>}</div>{detection.visualEvidence && <p className="mt-4 text-xs leading-relaxed text-muted-foreground"><span className="font-medium text-foreground">Visual evidence:</span> {detection.visualEvidence}</p>}</div><div><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Why it matters</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">{detection.rationale}</p>{detection.frameReference && <p className="mt-4 text-xs text-muted-foreground">Preview anchored to the {detection.frameReference.toLowerCase()}.</p>}</div></div>}
     </article>
   );
 }
@@ -524,7 +518,7 @@ function LoadingScreen({ label }: { label: string }) {
 }
 
 function ErrorScreen({ message, onRetry, backHref }: { message: string; onRetry: () => void; backHref?: string }) {
-  return <div className="flex min-h-[55vh] items-center justify-center px-5"><div className="max-w-sm text-center"><div className="mx-auto grid size-10 place-items-center rounded-full bg-red-100 text-red-800"><AlertTriangle size={19} /></div><h2 className="mt-4 text-lg font-semibold">Something interrupted the desk.</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground" data-testid="status-error">{message}</p><div className="mt-5 flex items-center justify-center gap-2"><button type="button" onClick={onRetry} className="inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground" data-testid="button-retry"><RefreshCcw size={14} /> Try again</button>{backHref && <Link href={backHref} className="rounded-md border border-border px-3.5 py-2 text-sm font-medium" data-testid="link-error-back">Back</Link>}</div></div></div>;
+  return <div className="flex min-h-[55vh] items-center justify-center px-5"><div className="max-w-sm text-center"><div className="mx-auto grid size-10 place-items-center rounded-full bg-red-100 text-red-800"><AlertTriangle size={19} /></div><h2 className="mt-4 text-lg font-semibold">Something interrupted the desk.</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground" data-testid="status-error">{message}</p><div className="mt-5 flex items-center justify-center gap-2"><button type="button" onClick={onRetry} className="inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground" data-testid="button-retry"><RefreshCcw size={14} /> Try again</button>{backHref && <Link href={backHref} className="rounded-md px-3.5 py-2 text-sm font-medium" data-testid="link-error-back">Back</Link>}</div></div></div>;
 }
 
 function Router() {

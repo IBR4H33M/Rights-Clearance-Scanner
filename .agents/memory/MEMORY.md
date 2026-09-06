@@ -1,1 +1,2 @@
 - [OpenAPI integer compatibility](openapi-zod-compatibility.md) — generated integer schemas currently require Zod 4 helpers unavailable in this workspace's Zod 3 runtime.
+- [Repeated JSX class edits](repeated-jsx-class-edits.md) — anchor UI patches with nearby unique copy when identical utility-class strings appear multiple times.
