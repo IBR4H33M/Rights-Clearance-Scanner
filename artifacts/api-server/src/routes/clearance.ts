@@ -353,8 +353,8 @@ router.post("/projects/:projectId/assets", (req, res) => {
     height: parsed.data.height ?? 0,
     contentBase64: parsed.data.contentBase64,
   };
-  if (asset.sizeBytes > 18_000_000) {
-    res.status(413).json({ error: "Keep test uploads under 18 MB." });
+  if (asset.sizeBytes > 100_000_000) {
+    res.status(413).json({ error: "Keep uploads under 100 MB." });
     return;
   }
   project.assets.push(asset);

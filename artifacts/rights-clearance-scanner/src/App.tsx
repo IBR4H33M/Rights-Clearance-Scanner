@@ -317,7 +317,7 @@ function Home() {
                     <input type="file" multiple className="sr-only" accept=".pdf,.doc,.docx,.txt,.rtf,image/*,video/*" onChange={handleFiles} data-testid="input-assets" />
                     {uploadAsset.isPending ? <LoaderCircle size={24} className="animate-spin text-accent" /> : <UploadCloud size={24} className="text-accent" />}
                     <span className="mt-3 text-sm font-medium">{uploadAsset.isPending ? 'Adding material to the set…' : 'Drop files here or browse'}</span>
-                   <span className="mt-1 text-xs text-muted-foreground">PDF, DOCX, TXT, JPG, PNG, or MP4 · clips under 18 MB</span>
+                    <span className="mt-1 text-xs text-muted-foreground">PDF, DOCX, TXT, JPG, PNG, or MP4 · clips under 100 MB</span>
                   </label>
                   {uploadError && <div className="mt-3 flex items-center gap-2 text-xs text-destructive" data-testid="status-upload-error"><AlertTriangle size={14} />{uploadError}</div>}
                    {selectedProject.assets.filter((asset) => asset.type === 'image' || asset.type === 'video').length > 0 && (

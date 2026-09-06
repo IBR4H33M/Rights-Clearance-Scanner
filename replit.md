@@ -48,7 +48,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-- Test uploads are capped at 18 MB of decoded media; the JSON request envelope is configured to 25 MB because base64 expands the payload.
+- Uploads are capped at 100 MB of decoded media; the JSON request envelope is configured to 140 MB because base64 expands the payload.
 
 ## Pointers
 
