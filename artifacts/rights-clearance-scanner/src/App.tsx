@@ -382,9 +382,6 @@ function Home() {
                 </div>
               </div>
               <div className="mt-5"><ProjectPicker projects={projects} selectedId={selectedId} onSelect={setSelectedId} onCreated={(project) => { setSelectedId(project.id); queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() }); }} /></div>
-              {projects.length > 0 && <div className="mt-5 space-y-1 pt-4">
-                {projects.slice(0, 5).map((project) => <button type="button" key={project.id} onClick={() => setSelectedId(project.id)} className={`flex w-full items-center justify-between rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-muted ${project.id === selectedId ? 'bg-muted' : ''}`} data-testid={`button-sidebar-project-${project.id}`}><span className="flex min-w-0 items-center gap-2.5"><span className={`status-dot ${project.reportStatus === 'ready' ? 'bg-emerald-600' : 'bg-muted-foreground/40'}`} /><span className="truncate text-sm">{project.title}</span></span><span className="font-mono text-[10px] text-muted-foreground">{project.detectionCount}</span></button>)}
-              </div>}
             </section>
           </aside>
         </div>
