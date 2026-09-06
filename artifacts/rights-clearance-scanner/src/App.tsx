@@ -158,12 +158,12 @@ function ProjectPicker({ projects, selectedId, onSelect, onCreated }: { projects
   return (
     <div className="relative space-y-2">
       {selected && (
-        <div className="rounded-md bg-sidebar-accent px-3 py-2.5" data-testid="current-project">
-          <span className="block truncate text-sm font-medium">{selected.title}</span>
-          <span className="font-mono text-[9px] uppercase tracking-wider text-sidebar-foreground/55">{selected.assetCount} assets · {selected.detectionCount} findings</span>
+        <div className="rounded-md bg-sidebar-accent px-3 py-2.5 text-sidebar-accent-foreground" data-testid="current-project">
+          <span className="block truncate text-sm font-semibold text-sidebar-accent-foreground">{selected.title}</span>
+          <span className="font-mono text-[9px] uppercase tracking-wider text-sidebar-accent-foreground/75">{selected.assetCount} assets · {selected.detectionCount} findings</span>
         </div>
       )}
-      <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-md bg-sidebar-accent/45 px-3 py-2.5 text-left transition-colors hover:bg-sidebar-accent" data-testid="button-project-picker">
+      <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-md bg-sidebar-accent/45 px-3 py-2.5 text-left text-sidebar-accent-foreground transition-colors hover:bg-sidebar-accent" data-testid="button-project-picker">
         <span className="min-w-0 text-sm font-medium">{selected ? 'Select another project' : 'Select a project'}</span>
         <ChevronDown size={15} className={`shrink-0 text-sidebar-foreground/55 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
