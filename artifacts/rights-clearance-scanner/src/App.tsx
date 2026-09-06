@@ -445,10 +445,9 @@ function ReportPage() {
           <div className="space-y-6">
             <section className="rounded-lg bg-card p-5 sm:p-7">
               <div className="flex flex-col justify-between gap-5 pb-6 lg:flex-row lg:items-start">
-                <div className="max-w-2xl"><p className="text-sm leading-relaxed text-muted-foreground">{reportQuery.data.summary}</p></div>
+                <div className="max-w-2xl"><p className="text-[clamp(1.5rem,3vw,2.5rem)] font-semibold leading-tight tracking-[-0.035em] text-foreground">{reportQuery.data.summary}</p></div>
                 <div className="grid grid-cols-3 gap-2 lg:min-w-[305px]">{(['high', 'medium', 'low'] as const).map((level) => <div className="bg-muted/65 px-3 py-3" key={level} data-testid={`report-stat-${level}`}><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{level}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{reportQuery.data.counts[level]}</p></div>)}</div>
               </div>
-              <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"><span>{reportQuery.data.detections.length} signals detected</span><span>{reportQuery.data.analyzedAssets} source assets</span><span>Pass date {formatDate(reportQuery.data.generatedAt)}</span></div>
             </section>
             <section className="rounded-lg bg-card">
               <div className="flex flex-col justify-between gap-4 px-5 py-5 sm:flex-row sm:items-center sm:px-7">
