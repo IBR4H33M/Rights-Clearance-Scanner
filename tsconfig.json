@@ -4,7 +4,13 @@
   "files": [],
   "references": [
     {
-      "path": "./lib/db"
+      "path": "./lib/clickhouse-mcp"
+    },
+    {
+      "path": "./lib/cloudinary"
+    },
+    {
+      "path": "./lib/agent"
     },
     {
       "path": "./lib/api-client-react"
