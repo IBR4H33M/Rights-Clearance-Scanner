@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { SCHEMA_SQL } from "./schema.js";
+import { SCHEMA_SQL } from "./schema";
 
 export type QueryResult = {
   rows: Array<Record<string, unknown>>;
@@ -23,6 +23,8 @@ export async function connectClickHouse(): Promise<Client> {
     CLICKHOUSE_USER: process.env.CLICKHOUSE_USER ?? "default",
     CLICKHOUSE_PASSWORD: process.env.CLICKHOUSE_PASSWORD ?? "",
     CLICKHOUSE_SECURE: process.env.CLICKHOUSE_SECURE ?? "true",
+    CLICKHOUSE_ALLOW_WRITE_ACCESS: "true",
+    CLICKHOUSE_ALLOW_DROP: "true",
   };
 
   // Determine which command to use for running mcp-clickhouse
@@ -47,11 +49,12 @@ export async function connectClickHouse(): Promise<Client> {
 
   mcpClient = new Client(
     { name: "rights-clearance-scanner", version: "1.0.0" },
-    { capabilities: { tools: {} } }
+    { capabilities: {} }
   );
 
   await mcpClient.connect(transport);
-  console.log("[ClickHouse MCP] Connected to mcp-clickhouse server");
+  const tools = await mcpClient.listTools();
+  console.log("[ClickHouse MCP] Connected. Tools:", tools.tools.map((t) => t.name).join(", "));
 
   return mcpClient;
 }
@@ -62,17 +65,25 @@ export async function connectClickHouse(): Promise<Client> {
 export async function queryClickHouse(sql: string): Promise<QueryResult> {
   const client = await connectClickHouse();
   const result = await client.callTool({
-    name: "read_query",
+    name: "run_query",
     arguments: { query: sql },
   });
+
+  if (result.isError) {
+    const errMsg = Array.isArray(result.content)
+      ? String((result.content[0] as { text?: string }).text ?? JSON.stringify(result.content))
+      : "run_query failed";
+    console.error(`[ClickHouse MCP] run_query failed for: ${sql}\nError: ${errMsg}`);
+    throw new Error(errMsg);
+  }
 
   const text =
     Array.isArray(result.content) && result.content.length > 0
       ? String((result.content[0] as { text?: string }).text ?? "")
       : "";
 
-  // The MCP server returns tab-separated data with headers
   const rows = parseClickHouseResponse(text);
+  console.log(`[ClickHouse MCP Query] "${sql.slice(0, 50)}..." -> raw text:\n${text}\nparsed rows:`, rows);
   return { rows, text };
 }
 
@@ -82,12 +93,18 @@ export async function queryClickHouse(sql: string): Promise<QueryResult> {
 export async function executeClickHouse(sql: string): Promise<string> {
   const client = await connectClickHouse();
 
-  // mcp-clickhouse exposes run_select_query for reads and
-  // we use the query tool for writes too
   const result = await client.callTool({
-    name: "write_query",
+    name: "run_query",
     arguments: { query: sql },
   });
+
+  if (result.isError) {
+    const errMsg = Array.isArray(result.content)
+      ? String((result.content[0] as { text?: string }).text ?? JSON.stringify(result.content))
+      : "run_query failed";
+    console.error(`[ClickHouse MCP] executeClickHouse failed for: ${sql}\nError: ${errMsg}`);
+    throw new Error(errMsg);
+  }
 
   const text =
     Array.isArray(result.content) && result.content.length > 0
@@ -133,7 +150,39 @@ function parseClickHouseResponse(
 ): Array<Record<string, unknown>> {
   if (!text || !text.trim()) return [];
 
-  const lines = text.trim().split("\n");
+  const trimmed = text.trim();
+
+  // mcp-clickhouse 0.6+ formats query results as JSON: {"columns": [...], "rows": [[...]]}
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && Array.isArray(parsed.columns) && Array.isArray(parsed.rows)) {
+        const cols: string[] = parsed.columns;
+        return parsed.rows.map((rowArr: unknown[]) => {
+          const rowObj: Record<string, unknown> = {};
+          for (let j = 0; j < cols.length; j++) {
+            const key = cols[j]!;
+            const val = rowArr[j];
+            // Only convert string numbers that are purely digits/decimals
+            if (typeof val === "string" && val !== "" && !isNaN(Number(val)) && !val.includes(":") && !val.includes("-") && !val.startsWith("0x")) {
+              rowObj[key] = Number(val);
+            } else {
+              rowObj[key] = val === "" ? null : val;
+            }
+          }
+          return rowObj;
+        });
+      }
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Fall through to tab-separated parser
+    }
+  }
+
+  // Fallback to tab-separated format
+  const lines = trimmed.split("\n");
   if (lines.length < 2) return [];
 
   const headers = lines[0]!.split("\t");
@@ -145,9 +194,11 @@ function parseClickHouseResponse(
     for (let j = 0; j < headers.length; j++) {
       const key = headers[j]!.trim();
       const val = values[j]?.trim() ?? "";
-      // Try to parse numbers
-      const num = Number(val);
-      row[key] = val === "" ? null : !isNaN(num) && val !== "" ? num : val;
+      if (val !== "" && !isNaN(Number(val)) && !val.includes(":") && !val.includes("-")) {
+        row[key] = Number(val);
+      } else {
+        row[key] = val === "" ? null : val;
+      }
     }
     rows.push(row);
   }

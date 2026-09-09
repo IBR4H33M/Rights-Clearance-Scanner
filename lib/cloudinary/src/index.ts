@@ -52,14 +52,20 @@ export async function uploadAsset(
 
   const dataUri = `data:${options.mimeType};base64,${base64Data}`;
 
-  const result: UploadApiResponse = await cloudinary.uploader.upload(dataUri, {
-    folder: options.folder ?? "rights-clearance",
-    resource_type: options.resourceType ?? "auto",
-    use_filename: true,
-    unique_filename: true,
-    overwrite: false,
-    public_id: options.filename.replace(/\.[^.]+$/, ""), // strip extension
-  });
+    const cleanName = options.filename
+      .replace(/\.[^.]+$/, "")
+      .replace(/[^a-zA-Z0-9_-]/g, "_")
+      .slice(0, 60) || "asset";
+    const publicId = `${Date.now()}_${cleanName}`;
+
+    const result: UploadApiResponse = await cloudinary.uploader.upload(dataUri, {
+      folder: options.folder ?? "rights-clearance",
+      resource_type: options.resourceType ?? "auto",
+      use_filename: false,
+      unique_filename: true,
+      overwrite: false,
+      public_id: publicId,
+    });
 
   return {
     secureUrl: result.secure_url,

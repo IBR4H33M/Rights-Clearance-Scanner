@@ -31,12 +31,39 @@ function escapeStr(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+function getUserIdFromReq(req: any): string {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  const customHeader = req.headers["x-user-id"];
+  if (typeof customHeader === "string" && customHeader.trim()) {
+    return customHeader.trim();
+  }
+  const q = req.query?.userId;
+  if (typeof q === "string" && q.trim()) {
+    return q.trim();
+  }
+  const bodyUser = req.body?.userId;
+  if (typeof bodyUser === "string" && bodyUser.trim()) {
+    return bodyUser.trim();
+  }
+  return "";
+}
+
 // ─── GET /projects ──────────────────────────────────────────────────────────
 
-router.get("/projects", async (_req, res) => {
+router.get("/projects", async (req, res) => {
   try {
+    const userId = getUserIdFromReq(req);
+    // If not authenticated, return empty array - never expose other users' projects
+    if (!userId) {
+      res.json([]);
+      return;
+    }
+
     const { rows } = await queryClickHouse(
-      `SELECT id, title, created_at FROM projects ORDER BY created_at DESC`
+      `SELECT id, title, created_at, user_id FROM projects WHERE user_id = '${escapeStr(userId)}' ORDER BY created_at DESC`
     );
 
     const projectsWithAssets = await Promise.all(
@@ -54,6 +81,7 @@ router.get("/projects", async (_req, res) => {
           id: projectId,
           title: String(row.title),
           createdAt: String(row.created_at),
+          userId: String(row.user_id ?? ""),
           assetCount: assetRows.length,
           detectionCount,
           reportStatus: detectionCount > 0 ? "ready" : "not_started",
@@ -92,11 +120,12 @@ router.post("/projects", async (req, res) => {
 
   const id = randomUUID();
   const title = parsed.data.title.trim();
+  const userId = getUserIdFromReq(req);
   const now = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
 
   try {
     await executeClickHouse(
-      `INSERT INTO projects (id, title, created_at) VALUES ('${escapeStr(id)}', '${escapeStr(title)}', '${now}')`
+      `INSERT INTO projects (id, title, user_id, created_at) VALUES ('${escapeStr(id)}', '${escapeStr(title)}', '${escapeStr(userId)}', '${now}')`
     );
 
     res.status(201).json(
@@ -116,6 +145,56 @@ router.post("/projects", async (req, res) => {
   }
 });
 
+// ─── PATCH /projects/:projectId (Edit / Rename Project) ─────────────────────
+
+router.patch("/projects/:projectId", async (req, res): Promise<void> => {
+  const { projectId } = req.params;
+  const { title } = req.body ?? {};
+
+  if (!title || typeof title !== "string" || !title.trim()) {
+    res.status(400).json({ error: "Title is required" });
+    return;
+  }
+
+  const cleanTitle = title.trim();
+  try {
+    await executeClickHouse(
+      `ALTER TABLE projects UPDATE title = '${escapeStr(cleanTitle)}' WHERE id = '${escapeStr(projectId)}'`
+    );
+    res.json({ id: projectId, title: cleanTitle });
+  } catch (err) {
+    console.error("Error updating project:", err);
+    res.status(500).json({ error: "Failed to update project" });
+  }
+});
+
+// ─── DELETE /projects/:projectId (Delete Project & Associated Data) ─────────
+
+router.delete("/projects/:projectId", async (req, res): Promise<void> => {
+  const { projectId } = req.params;
+  try {
+    await executeClickHouse(
+      `ALTER TABLE projects DELETE WHERE id = '${escapeStr(projectId)}'`
+    );
+    await executeClickHouse(
+      `ALTER TABLE assets DELETE WHERE project_id = '${escapeStr(projectId)}'`
+    );
+    await executeClickHouse(
+      `ALTER TABLE detections DELETE WHERE project_id = '${escapeStr(projectId)}'`
+    );
+    await executeClickHouse(
+      `ALTER TABLE reports DELETE WHERE project_id = '${escapeStr(projectId)}'`
+    );
+    await executeClickHouse(
+      `ALTER TABLE project_stats DELETE WHERE project_id = '${escapeStr(projectId)}'`
+    );
+    res.json({ success: true, id: projectId });
+  } catch (err) {
+    console.error("Error deleting project:", err);
+    res.status(500).json({ error: "Failed to delete project" });
+  }
+});
+
 // ─── POST /projects/:projectId/assets ───────────────────────────────────────
 
 router.post("/projects/:projectId/assets", async (req, res): Promise<void> => {
@@ -128,6 +207,18 @@ router.post("/projects/:projectId/assets", async (req, res): Promise<void> => {
   }
 
   const projectId = params.data.projectId;
+
+  // Check file limits based on role: Demo = 100MB, Registered = 400MB
+  const userRole = (req.headers["x-user-role"] as string) || (req.body?.userRole as string) || "registered";
+  const maxBytes = userRole === "demo" ? 100 * 1024 * 1024 : 400 * 1024 * 1024;
+  const rawSize = parsed.data.contentBase64 ? Math.round((parsed.data.contentBase64.length * 3) / 4) : 0;
+  if (rawSize > maxBytes) {
+    const limitLabel = userRole === "demo" ? "100 MB" : "400 MB";
+    res.status(413).json({
+      error: `File size (~${(rawSize / (1024 * 1024)).toFixed(1)} MB) exceeds the ${limitLabel} limit for ${userRole === "demo" ? "demo mode" : "registered users"}.`,
+    });
+    return;
+  }
 
   // Check project exists
   const { rows: projectRows } = await queryClickHouse(
@@ -368,8 +459,19 @@ router.post(
           height: Number(a.height ?? 0),
         }));
 
+      const reportId = randomUUID();
+      const now = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
+
+      const { rows: priorReports } = await queryClickHouse(
+        `SELECT count() as cnt FROM reports WHERE project_id = '${escapeStr(projectId)}'`
+      );
+      const reportSeq = Number(priorReports[0]?.cnt ?? 0) + 1;
+      const reportName = `Report #${reportSeq} — ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
+
       const report = {
+        id: reportId,
         projectId,
+        name: reportName,
         generatedAt: new Date().toISOString(),
         summary:
           detections.length > 0
@@ -381,6 +483,22 @@ router.post(
         previews,
         toolCalls: allToolCalls,
       };
+
+      try {
+        const detectionsJson = JSON.stringify(detections);
+        const toolCallsJson = JSON.stringify(allToolCalls);
+        await executeClickHouse(
+          `INSERT INTO reports (id, project_id, name, summary, risk_high, risk_medium, risk_low, analyzed_assets, detections_json, tool_calls_json, generated_at)
+           VALUES ('${escapeStr(reportId)}', '${escapeStr(projectId)}', '${escapeStr(reportName)}', '${escapeStr(report.summary)}', ${counts.high}, ${counts.medium}, ${counts.low}, ${assetRows.length}, '${escapeStr(detectionsJson)}', '${escapeStr(toolCallsJson)}', '${now}')`
+        );
+
+        await executeClickHouse(
+          `INSERT INTO project_stats (project_id, scans_count, total_detections, high_risk_count, medium_risk_count, low_risk_count, last_scan_at, updated_at)
+           VALUES ('${escapeStr(projectId)}', ${reportSeq}, ${detections.length}, ${counts.high}, ${counts.medium}, ${counts.low}, '${now}', '${now}')`
+        );
+      } catch (saveErr) {
+        console.error("Failed to save report record to ClickHouse:", saveErr);
+      }
 
       res.json(report);
     } catch (error) {
@@ -400,7 +518,152 @@ router.post(
   }
 );
 
+// ─── GET /projects/:projectId/reports ───────────────────────────────────────
+// Get all reports recorded for this project
+
+router.get("/projects/:projectId/reports", async (req, res): Promise<void> => {
+  const projectId = req.params.projectId;
+  try {
+    const { rows } = await queryClickHouse(
+      `SELECT id, project_id, name, summary, risk_high, risk_medium, risk_low, analyzed_assets, generated_at
+       FROM reports WHERE project_id = '${escapeStr(projectId)}' ORDER BY generated_at DESC`
+    );
+
+    const reports = rows.map((r) => ({
+      id: String(r.id),
+      projectId: String(r.project_id),
+      name: String(r.name || `Report ${String(r.id).slice(0, 8)}`),
+      summary: String(r.summary ?? ""),
+      counts: {
+        high: Number(r.risk_high ?? 0),
+        medium: Number(r.risk_medium ?? 0),
+        low: Number(r.risk_low ?? 0),
+      },
+      analyzedAssets: Number(r.analyzed_assets ?? 0),
+      generatedAt: String(r.generated_at),
+    }));
+
+    res.json(reports);
+  } catch (err) {
+    console.error("Error fetching reports list:", err);
+    res.status(500).json({ error: "Failed to fetch reports list" });
+  }
+});
+
+// ─── GET /projects/:projectId/reports/:reportId ─────────────────────────────
+// Get specific historical report with full detections & tool calls
+
+router.get("/projects/:projectId/reports/:reportId", async (req, res): Promise<void> => {
+  const { projectId, reportId } = req.params;
+  try {
+    const { rows } = await queryClickHouse(
+      `SELECT * FROM reports WHERE id = '${escapeStr(reportId)}' AND project_id = '${escapeStr(projectId)}' LIMIT 1`
+    );
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    const r = rows[0]!;
+    let detections: unknown[] = [];
+    let toolCalls: unknown[] = [];
+
+    try {
+      if (r.detections_json) detections = JSON.parse(String(r.detections_json));
+    } catch { /* ignore */ }
+
+    try {
+      if (r.tool_calls_json) toolCalls = JSON.parse(String(r.tool_calls_json));
+    } catch { /* ignore */ }
+
+    const { rows: assetRows } = await queryClickHouse(
+      `SELECT id, project_id, type, cloudinary_url, filename, mime_type, width, height FROM assets WHERE project_id = '${escapeStr(projectId)}'`
+    );
+
+    const previews = assetRows
+      .filter((a) => String(a.type) === "image" || String(a.type) === "video")
+      .map((a) => ({
+        assetId: String(a.id),
+        filename: String(a.filename),
+        type: String(a.type) as "image" | "video",
+        mimeType: String(a.mime_type),
+        dataUrl: String(a.cloudinary_url),
+        width: Number(a.width ?? 0),
+        height: Number(a.height ?? 0),
+      }));
+
+    res.json({
+      id: String(r.id),
+      projectId: String(r.project_id),
+      name: String(r.name || `Report ${String(r.id).slice(0, 8)}`),
+      generatedAt: String(r.generated_at),
+      summary: String(r.summary ?? ""),
+      counts: {
+        high: Number(r.risk_high ?? 0),
+        medium: Number(r.risk_medium ?? 0),
+        low: Number(r.risk_low ?? 0),
+      },
+      detections,
+      analyzedAssets: Number(r.analyzed_assets ?? 0),
+      previews,
+      toolCalls,
+    });
+  } catch (err) {
+    console.error("Error fetching single report:", err);
+    res.status(500).json({ error: "Failed to fetch report" });
+  }
+});
+
+// ─── GET /projects/:projectId/stats ─────────────────────────────────────────
+// Get project-level clearance statistics stored in ClickHouse
+
+router.get("/projects/:projectId/stats", async (req, res): Promise<void> => {
+  const projectId = req.params.projectId;
+  try {
+    const { rows: reportRows } = await queryClickHouse(
+      `SELECT count() as scans, sum(risk_high) as total_high, sum(risk_medium) as total_med, sum(risk_low) as total_low
+       FROM reports WHERE project_id = '${escapeStr(projectId)}'`
+    );
+
+    const { rows: assetRows } = await queryClickHouse(
+      `SELECT count() as total_assets, type FROM assets WHERE project_id = '${escapeStr(projectId)}' GROUP BY type`
+    );
+
+    const { rows: detectionRows } = await queryClickHouse(
+      `SELECT count() as total, category FROM detections WHERE project_id = '${escapeStr(projectId)}' GROUP BY category`
+    );
+
+    const scansCount = Number(reportRows[0]?.scans ?? 0);
+    const highRisks = Number(reportRows[0]?.total_high ?? 0);
+    const medRisks = Number(reportRows[0]?.total_med ?? 0);
+    const lowRisks = Number(reportRows[0]?.total_low ?? 0);
+
+    res.json({
+      projectId,
+      scansCount,
+      riskTotals: {
+        high: highRisks,
+        medium: medRisks,
+        low: lowRisks,
+      },
+      assetBreakdown: assetRows.map((a) => ({
+        type: String(a.type),
+        count: Number(a.total_assets ?? 0),
+      })),
+      categoryBreakdown: detectionRows.map((d) => ({
+        category: String(d.category),
+        count: Number(d.total ?? 0),
+      })),
+    });
+  } catch (err) {
+    console.error("Error fetching project stats:", err);
+    res.status(500).json({ error: "Failed to fetch project statistics" });
+  }
+});
+
 // ─── GET /projects/:projectId/report ────────────────────────────────────────
+// Returns the latest report (reads latest from reports table, fallback to detections)
 
 router.get("/projects/:projectId/report", async (req, res): Promise<void> => {
   const params = GetProjectReportParams.safeParse(req.params);
@@ -412,6 +675,58 @@ router.get("/projects/:projectId/report", async (req, res): Promise<void> => {
   const projectId = params.data.projectId;
 
   try {
+    // Check if there is an entry in reports table
+    const { rows: latestReportRows } = await queryClickHouse(
+      `SELECT * FROM reports WHERE project_id = '${escapeStr(projectId)}' ORDER BY generated_at DESC LIMIT 1`
+    );
+
+    const { rows: assetRows } = await queryClickHouse(
+      `SELECT id, project_id, type, cloudinary_url, filename, mime_type, width, height FROM assets WHERE project_id = '${escapeStr(projectId)}'`
+    );
+
+    const previews = assetRows
+      .filter((a) => String(a.type) === "image" || String(a.type) === "video")
+      .map((a) => ({
+        assetId: String(a.id),
+        filename: String(a.filename),
+        type: String(a.type) as "image" | "video",
+        mimeType: String(a.mime_type),
+        dataUrl: String(a.cloudinary_url),
+        width: Number(a.width ?? 0),
+        height: Number(a.height ?? 0),
+      }));
+
+    if (latestReportRows.length > 0) {
+      const r = latestReportRows[0]!;
+      let detections: unknown[] = [];
+      let toolCalls: unknown[] = [];
+      try {
+        if (r.detections_json) detections = JSON.parse(String(r.detections_json));
+      } catch { /* ignore */ }
+      try {
+        if (r.tool_calls_json) toolCalls = JSON.parse(String(r.tool_calls_json));
+      } catch { /* ignore */ }
+
+      res.json({
+        id: String(r.id),
+        projectId: String(r.project_id),
+        name: String(r.name || "Latest Clearance Report"),
+        generatedAt: String(r.generated_at),
+        summary: String(r.summary ?? ""),
+        counts: {
+          high: Number(r.risk_high ?? 0),
+          medium: Number(r.risk_medium ?? 0),
+          low: Number(r.risk_low ?? 0),
+        },
+        detections,
+        analyzedAssets: Number(r.analyzed_assets ?? assetRows.length),
+        previews,
+        toolCalls,
+      });
+      return;
+    }
+
+    // Fallback to detections table if no report record was saved yet
     const { rows: detectionRows } = await queryClickHouse(
       `SELECT * FROM detections WHERE project_id = '${escapeStr(projectId)}' ORDER BY detected_at`
     );
@@ -420,10 +735,6 @@ router.get("/projects/:projectId/report", async (req, res): Promise<void> => {
       res.status(404).json({ error: "No report has been generated yet" });
       return;
     }
-
-    const { rows: assetRows } = await queryClickHouse(
-      `SELECT id, project_id, type, cloudinary_url, filename, mime_type, width, height FROM assets WHERE project_id = '${escapeStr(projectId)}'`
-    );
 
     const counts = { low: 0, medium: 0, high: 0 };
     const detections = detectionRows.map((d) => {
@@ -456,18 +767,6 @@ router.get("/projects/:projectId/report", async (req, res): Promise<void> => {
       };
     });
 
-    const previews = assetRows
-      .filter((a) => String(a.type) === "image" || String(a.type) === "video")
-      .map((a) => ({
-        assetId: String(a.id),
-        filename: String(a.filename),
-        type: String(a.type) as "image" | "video",
-        mimeType: String(a.mime_type),
-        dataUrl: String(a.cloudinary_url),
-        width: Number(a.width ?? 0),
-        height: Number(a.height ?? 0),
-      }));
-
     const report = {
       projectId,
       generatedAt: new Date().toISOString(),
@@ -478,7 +777,7 @@ router.get("/projects/:projectId/report", async (req, res): Promise<void> => {
       previews,
     };
 
-    res.json(GetProjectReportResponse.parse(report));
+    res.json(report);
   } catch (err) {
     console.error("Error fetching report:", err);
     res.status(500).json({ error: "Failed to fetch report" });

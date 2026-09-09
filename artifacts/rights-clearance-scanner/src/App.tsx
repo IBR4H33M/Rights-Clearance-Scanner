@@ -1,5 +1,5 @@
 import { type ChangeEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -9,21 +9,29 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowUpRight,
+  BarChart3,
   Check,
   ChevronDown,
   CircleDashed,
-  Clapperboard,
+  Download,
+  Edit3,
   FileText,
   Film,
   FolderOpen,
   Image as ImageIcon,
   LoaderCircle,
+  LogOut,
   Play,
   Plus,
+  Printer,
   RefreshCcw,
   ScanSearch,
   ShieldAlert,
+  Sparkles,
+  Trash2,
   UploadCloud,
+  User,
+  Wrench,
   X,
 } from 'lucide-react';
 import {
@@ -45,12 +53,20 @@ import {
   useLocation,
   Router as WouterRouter,
 } from 'wouter';
+import { AuthProvider, useAuth } from '@/lib/auth';
+import { exportReportToPDF } from '@/lib/pdf-export';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const formatDate = (value?: string) =>
   value
-    ? new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value))
+    ? new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
     : '—';
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -97,100 +113,444 @@ const getMediaDimensions = (file: File, type: string) =>
 const categoryLabel = (category: string) =>
   ({ celebrity_name: 'Celebrity name', existing_ip: 'Existing IP', brand: 'Brand', logo: 'Logo', song: 'Song' } as Record<string, string>)[category] ?? category;
 
-function Shell({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
-  const isReport = location.startsWith('/report/');
+// ─── Left Sidebar Project Picker ───────────────────────────────────────────
+
+function SidebarProjectPicker({
+  projects,
+  selectedId,
+  onSelect,
+  onCreated,
+}: {
+  projects: Project[];
+  selectedId?: string;
+  onSelect: (id: string) => void;
+  onCreated: (project: Project) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const createProject = useCreateProject();
+  const selected = projects.find((project) => project.id === selectedId);
+
+  const submit = () => {
+    const cleanTitle = title.trim();
+    if (!cleanTitle || createProject.isPending) return;
+    createProject.mutate(
+      { data: { title: cleanTitle } },
+      {
+        onSuccess: (project) => {
+          onCreated(project);
+          setTitle('');
+          setOpen(false);
+        },
+      }
+    );
+  };
+
   return (
-    <div className="min-h-[100dvh] bg-background text-foreground md:grid md:grid-cols-[238px_1fr]">
-      <aside className="bg-sidebar text-sidebar-foreground md:min-h-[100dvh]">
-        <div className="flex items-center justify-between px-5 py-5 md:block md:h-full">
-          <Link href="/" className="flex items-center gap-3" data-testid="link-brand">
-            <span className="grid size-9 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-              <Clapperboard size={19} strokeWidth={2.2} />
+    <div className="relative my-4 space-y-2">
+      <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/60 px-1">
+        <span>Active Project</span>
+        <span>{projects.length} Total</span>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-2.5 rounded-md border border-sidebar-border/60 bg-sidebar-accent/50 px-3 py-2.5 text-left text-sidebar-accent-foreground transition-all hover:bg-sidebar-accent hover:border-sidebar-primary/40 shadow-sm"
+        data-testid="button-sidebar-project-picker"
+      >
+        <div className="min-w-0 flex-1">
+          <span className="block truncate text-xs font-semibold text-sidebar-foreground">
+            {selected ? selected.title : 'Select a Project'}
+          </span>
+          {selected && (
+            <span className="font-mono text-[9px] uppercase tracking-wider text-sidebar-foreground/60">
+              {selected.assetCount} assets · {selected.detectionCount} flags
             </span>
-            <span>
-              <span className="block text-sm font-bold tracking-tight">RightScan</span>
-              <span className="retro-kicker text-sidebar-foreground/75">a production review</span>
+          )}
+        </div>
+        <ChevronDown
+          size={14}
+          className={`shrink-0 text-sidebar-foreground/60 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-40 mt-1.5 isolate rounded-md border border-sidebar-border bg-sidebar p-2 shadow-2xl fade-up">
+          <div className="max-h-56 overflow-auto divide-y divide-sidebar-border/30">
+            {projects.length === 0 ? (
+              <p className="p-3 text-center text-xs text-sidebar-foreground/50">No projects yet.</p>
+            ) : (
+              projects.map((project) => (
+                <button
+                  type="button"
+                  key={project.id}
+                  onClick={() => {
+                    onSelect(project.id);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between rounded px-2.5 py-2 text-left text-xs transition-colors ${
+                    project.id === selectedId
+                      ? 'bg-sidebar-primary text-sidebar-primary-foreground font-semibold'
+                      : 'text-sidebar-foreground/80 hover:bg-sidebar-accent'
+                  }`}
+                  data-testid={`button-project-${project.id}`}
+                >
+                  <span className="truncate mr-2">{project.title}</span>
+                  <span className="shrink-0 font-mono text-[9px] opacity-70">
+                    {project.assetCount} assets
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+          <div className="mt-2 border-t border-sidebar-border/40 pt-2">
+            <div className="flex gap-1.5">
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                onKeyDown={(event) => event.key === 'Enter' && submit()}
+                placeholder="New project title…"
+                className="min-w-0 flex-1 rounded border border-sidebar-border/50 bg-sidebar-accent/60 px-2.5 py-1.5 text-xs text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/35 focus:ring-1 focus:ring-sidebar-primary"
+                data-testid="input-new-project-title"
+              />
+              <button
+                type="button"
+                onClick={submit}
+                disabled={!title.trim() || createProject.isPending}
+                className="grid place-items-center rounded bg-sidebar-primary px-2.5 text-sidebar-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
+                data-testid="button-create-project"
+                title="Create Project"
+              >
+                {createProject.isPending ? <LoaderCircle size={13} className="animate-spin" /> : <Plus size={14} />}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Application Shell ────────────────────────────────────────────────
+
+function Shell({
+  children,
+  projects,
+  selectedId,
+  onSelectProject,
+}: {
+  children: ReactNode;
+  projects: Project[];
+  selectedId?: string;
+  onSelectProject: (id: string) => void;
+}) {
+  const [location, setLocation] = useLocation();
+  const { user, logout } = useAuth();
+  const queryClient = useQueryClient();
+
+  const isReport = location.startsWith('/report/');
+  const isReportsList = location === '/reports';
+  const isAnalytics = location === '/analytics';
+
+  const workspaceTitle = user
+    ? user.role === 'demo'
+      ? 'Demo Workspace'
+      : `${user.username}’s Workspace`
+    : 'Studio Workspace';
+
+  const tierBadge = user
+    ? user.role === 'demo'
+      ? 'DEMO · 100MB LIMIT'
+      : 'REGISTERED · 400MB LIMIT'
+    : 'GUEST ACCESS';
+
+  if (!user) {
+    return (
+      <main className="min-h-[100dvh] bg-background text-foreground">
+        {children}
+      </main>
+    );
+  }
+
+  return (
+    <div className="min-h-[100dvh] bg-background text-foreground md:grid md:grid-cols-[250px_1fr]">
+      {/* Left Sidebar (only shown when authenticated or demo) */}
+      <aside className="border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground md:min-h-[100dvh] flex flex-col justify-between">
+        <div className="px-5 py-5">
+          {/* Top Left Workspace Name */}
+          <div className="pb-4 border-b border-sidebar-border/40">
+            <span className="block truncate text-sm font-bold tracking-tight text-sidebar-foreground">
+              {workspaceTitle}
             </span>
-          </Link>
-          <nav className="hidden space-y-1 md:mt-14 md:block">
-            <Link href="/" className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${!isReport ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'}`} data-testid="link-workspace">
-              <ScanSearch size={16} /><span>Clearance workspace</span>
+            <span className="inline-block font-mono text-[9px] font-semibold tracking-wider text-sidebar-primary/90 mt-0.5">
+              {tierBadge}
+            </span>
+          </div>
+
+          {/* Project Picker in Left Bar */}
+          <SidebarProjectPicker
+            projects={projects}
+            selectedId={selectedId}
+            onSelect={(id) => {
+              onSelectProject(id);
+              if (location !== '/') setLocation('/');
+            }}
+            onCreated={(newProj) => {
+              onSelectProject(newProj.id);
+              queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+              if (location !== '/') setLocation('/');
+            }}
+          />
+
+          {/* Navigation Links */}
+          <nav className="mt-6 space-y-1.5">
+            <Link
+              href={selectedId ? `/report/${selectedId}` : '/reports'}
+              className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-xs font-medium transition-colors ${
+                isReport || isReportsList
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
+              }`}
+              data-testid="link-reports"
+            >
+              <FileText size={15} />
+              <span>Reports</span>
             </Link>
-            <Link href={isReport ? location : '/'} className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${isReport ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'}`} data-testid="link-latest-report">
-              <FileText size={16} /><span>Latest report</span>
+
+            <Link
+              href="/analytics"
+              className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-xs font-medium transition-colors ${
+                isAnalytics
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
+              }`}
+              data-testid="link-analytics"
+            >
+              <BarChart3 size={15} />
+              <span>Analytics</span>
             </Link>
           </nav>
         </div>
+
+        {/* User Account / Session Footer */}
+        <div className="p-4 border-t border-sidebar-border/40 bg-sidebar-accent/20">
+          {user ? (
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex items-center gap-2">
+                <span className="grid size-7 place-items-center rounded-full bg-sidebar-primary/20 text-sidebar-primary text-xs font-bold">
+                  {user.username.charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium text-sidebar-foreground">{user.username}</p>
+                  <p className="font-mono text-[9px] text-sidebar-foreground/50">{user.maxFileSizeLabel} upload max</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={logout}
+                className="p-1.5 text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                title="Sign Out"
+                data-testid="button-signout"
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/"
+              className="flex items-center justify-center gap-2 w-full py-2 rounded bg-sidebar-primary text-sidebar-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity"
+            >
+              <User size={13} />
+              <span>Sign In / Demo</span>
+            </Link>
+          )}
+        </div>
       </aside>
+
+      {/* Main Content Area */}
       <main className="min-w-0">{children}</main>
     </div>
   );
 }
 
-function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description?: string; action?: ReactNode }) {
-  return (
-    <header className="px-5 py-7 sm:px-8 sm:py-9 lg:px-12">
-      <div className="mx-auto flex max-w-[1380px] flex-col justify-between gap-5 lg:flex-row lg:items-end">
-        <div>
-          <p className="retro-kicker text-accent">{eyebrow}</p>
-          <h1 className="mt-2 text-[clamp(1.8rem,3vw,2.65rem)] font-semibold tracking-[-0.045em]">{title}</h1>
-          {description && <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{description}</p>}
-        </div>
-        {action}
-      </div>
-    </header>
-  );
-}
+// ─── Retro Film Landing & Auth Section ─────────────────────────────────────
 
-function ProjectPicker({ projects, selectedId, onSelect, onCreated }: { projects: Project[]; selectedId?: string; onSelect: (id: string) => void; onCreated: (project: Project) => void }) {
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const createProject = useCreateProject();
-  const selected = projects.find((project) => project.id === selectedId);
-  const submit = () => {
-    const cleanTitle = title.trim();
-    if (!cleanTitle || createProject.isPending) return;
-    createProject.mutate({ data: { title: cleanTitle } }, {
-      onSuccess: (project) => { onCreated(project); setTitle(''); setOpen(false); },
-    });
+function RetroLandingHero() {
+  const { login, register, startDemo, loading } = useAuth();
+  const [authMode, setAuthMode] = useState<'demo' | 'signin' | 'register'>('demo');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    try {
+      if (authMode === 'demo') {
+        await startDemo();
+        await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+      } else if (authMode === 'signin') {
+        if (!username || !password) throw new Error('Please enter username and password');
+        await login(username, password);
+        await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+      } else if (authMode === 'register') {
+        if (!username || !password) throw new Error('Please enter username and password');
+        await register(username, password);
+        await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+      }
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Authentication failed');
+    }
   };
+
   return (
-    <div className="relative space-y-2">
-      {selected && (
-        <div className="rounded-md bg-sidebar-accent px-3 py-2.5 text-sidebar-accent-foreground" data-testid="current-project">
-          <span className="block truncate text-sm font-semibold text-sidebar-accent-foreground">{selected.title}</span>
-          <span className="font-mono text-[9px] uppercase tracking-wider text-sidebar-accent-foreground/75">{selected.assetCount} assets · {selected.detectionCount} findings</span>
+    <div className="relative overflow-hidden w-full min-h-[100dvh] flex flex-col justify-center items-center bg-card/40 px-6 py-12 sm:px-12 sm:py-20">
+      {/* Decorative film reel perforation borders */}
+      <div className="absolute top-0 left-0 right-0 h-3.5 film-strip opacity-25 border-b border-foreground/10" />
+      <div className="absolute bottom-0 left-0 right-0 h-3.5 film-strip opacity-25 border-t border-foreground/10" />
+
+      <div className="mx-auto max-w-4xl text-center">
+        {/* Cinema Slate Header Motif */}
+        <div className="inline-flex items-center gap-2 rounded border border-accent/40 bg-accent/10 px-3.5 py-1 text-xs font-mono uppercase tracking-widest text-accent-foreground mb-4">
+          <Clapperboard size={13} />
+          <span>PRODUCTION CLEARANCE INTELLIGENCE · ISO/ASTM STANDARDS</span>
         </div>
-      )}
-      <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 rounded-md bg-sidebar-accent/45 px-3 py-2.5 text-left text-sidebar-accent-foreground transition-colors hover:bg-sidebar-accent" data-testid="button-project-picker">
-        <span className="min-w-0 text-sm font-medium">{selected ? 'Select another project' : 'Select a project'}</span>
-        <ChevronDown size={15} className={`shrink-0 text-sidebar-foreground/55 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute left-0 right-0 top-full z-30 mt-2 isolate rounded-md bg-sidebar p-1.5 shadow-2xl">
-          <div className="max-h-56 overflow-auto">
-            {projects.map((project) => (
-              <button type="button" key={project.id} onClick={() => { onSelect(project.id); setOpen(false); }} className={`flex w-full items-center justify-between rounded px-2.5 py-2 text-left text-sm ${project.id === selectedId ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/75 hover:bg-sidebar-accent'}`} data-testid={`button-project-${project.id}`}>
-                <span className="truncate">{project.title}</span>
-                <span className="ml-3 font-mono text-[9px] opacity-60">{project.assetCount}</span>
-              </button>
-            ))}
+
+        {/* Large Retro Film Title */}
+        <h1 className="cinema-title text-[clamp(2.4rem,6vw,4.5rem)] font-bold tracking-tight text-foreground leading-[1.05]">
+          RIGHTSCANNER
+        </h1>
+
+        {/* Two-line Intro */}
+        <div className="mt-4 max-w-2xl mx-auto space-y-1 text-sm sm:text-base leading-relaxed text-muted-foreground">
+          <p className="font-medium text-foreground/90">
+            Automated rights clearance, trademark detection, and copyright risk intelligence for productions.
+          </p>
+          <p>
+            Scan scripts, footage, and imagery through AI agent inspection before festival or theatrical release.
+          </p>
+        </div>
+
+        {/* Retro Film Auth Desk */}
+        <div className="mt-10 mx-auto max-w-md rounded-lg border-2 border-border/80 bg-card p-6 shadow-xl relative">
+          <div className="flex border-b border-border mb-5">
+            <button
+              type="button"
+              onClick={() => { setAuthMode('demo'); setAuthError(''); }}
+              className={`flex-1 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                authMode === 'demo'
+                  ? 'border-b-2 border-primary text-primary font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Demo Access
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAuthMode('signin'); setAuthError(''); }}
+              className={`flex-1 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                authMode === 'signin'
+                  ? 'border-b-2 border-primary text-primary font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAuthMode('register'); setAuthError(''); }}
+              className={`flex-1 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                authMode === 'register'
+                  ? 'border-b-2 border-primary text-primary font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Register
+            </button>
           </div>
-          <div className="mt-1 pt-1">
-            {open && !createProject.isPending && (
-              <div className="flex gap-1">
-                <input value={title} onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && submit()} placeholder="New project title" className="min-w-0 flex-1 rounded bg-sidebar-accent px-2.5 py-2 text-xs text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/35 focus:ring-1 focus:ring-sidebar-primary" data-testid="input-new-project-title" />
-                <button type="button" onClick={submit} disabled={!title.trim()} className="rounded bg-sidebar-primary px-2.5 text-sidebar-primary-foreground disabled:opacity-40" data-testid="button-create-project"><Plus size={15} /></button>
+
+          <form onSubmit={handleAuthSubmit} className="space-y-4 text-left">
+            {authMode === 'demo' ? (
+              <div className="space-y-4 py-2">
+                <div className="rounded-md bg-accent/15 border border-accent/30 p-3 text-xs leading-relaxed text-foreground">
+                  <p className="font-semibold flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-accent-foreground" /> Instant Sandbox Mode
+                  </p>
+                  <p className="mt-1 text-muted-foreground">
+                    Test the agent immediately. Includes <strong>100 MB clip limit</strong> and persistent reports saved in ClickHouse.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => startDemo()}
+                  disabled={loading}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow hover:opacity-90 transition-opacity disabled:opacity-50"
+                  data-testid="button-launch-demo"
+                >
+                  {loading ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={15} fill="currentColor" />}
+                  <span>Launch Instant Demo (100 MB limit)</span>
+                </button>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="e.g. stanley_director"
+                    required
+                    className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary"
+                    data-testid="input-auth-username"
+                  />
+                </div>
+                <div>
+                  <label className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary"
+                    data-testid="input-auth-password"
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground font-mono">
+                  {authMode === 'register' ? '✓ Studio accounts receive 400 MB file upload limit.' : '✓ Access your saved productions & ClickHouse reports.'}
+                </p>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow hover:opacity-90 transition-opacity disabled:opacity-50"
+                  data-testid="button-auth-submit"
+                >
+                  {loading && <LoaderCircle size={15} className="animate-spin" />}
+                  <span>{authMode === 'signin' ? 'Sign In to Workspace' : 'Create Studio Account (400 MB)'}</span>
+                </button>
+              </>
+            )}
+
+            {authError && (
+              <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 p-2.5 rounded">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span>{authError}</span>
               </div>
             )}
-            {createProject.isPending && <div className="flex items-center gap-2 px-2 py-2 text-xs text-sidebar-foreground/55"><LoaderCircle size={13} className="animate-spin" /> Creating project</div>}
-          </div>
+          </form>
         </div>
-      )}
+      </div>
     </div>
   );
 }
+
+// ─── Project Workspace Component ───────────────────────────────────────────
 
 function FileGlyph({ type, size = 18 }: { type: string; size?: number }) {
   if (type === 'image') return <ImageIcon size={size} />;
@@ -198,271 +558,921 @@ function FileGlyph({ type, size = 18 }: { type: string; size?: number }) {
   return <FileText size={size} />;
 }
 
-function MediaAssetPreview({ asset, onRemove, removing }: { asset: Project['assets'][number]; onRemove: () => void; removing: boolean }) {
+function MediaAssetPreview({
+  asset,
+  onRemove,
+  removing,
+}: {
+  asset: Project['assets'][number];
+  onRemove: () => void;
+  removing: boolean;
+}) {
   if ((asset.type !== 'image' && asset.type !== 'video') || !asset.previewDataUrl) return null;
   return (
-    <div className="relative pt-4">
+    <div className="relative pt-4 group">
       <button
         type="button"
         onClick={onRemove}
         disabled={removing}
-        className="absolute right-1 top-0 z-10 grid size-6 place-items-center rounded-full bg-red-100 text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50"
+        className="absolute right-1 top-0 z-10 grid size-6 place-items-center rounded-full bg-red-100 text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 shadow-sm"
         aria-label={`Remove ${asset.filename}`}
         title={`Remove ${asset.filename}`}
         data-testid={`button-remove-asset-${asset.id}`}
       >
         {removing ? <LoaderCircle size={12} className="animate-spin" /> : <X size={13} strokeWidth={2.5} />}
       </button>
-      <div className="overflow-hidden rounded-md bg-muted" style={asset.width > 0 && asset.height > 0 ? { aspectRatio: `${asset.width} / ${asset.height}` } : undefined}>
+      <div
+        className="overflow-hidden rounded-md border border-border/80 bg-muted/60"
+        style={asset.width > 0 && asset.height > 0 ? { aspectRatio: `${asset.width} / ${asset.height}` } : undefined}
+      >
         {asset.type === 'video' ? (
-          <video className="block h-full w-full object-contain" src={asset.previewDataUrl} controls preload="metadata" aria-label={`Preview of ${asset.filename}`} />
+          <video
+            className="block h-full w-full object-contain"
+            src={asset.previewDataUrl}
+            controls
+            preload="metadata"
+            aria-label={`Preview of ${asset.filename}`}
+          />
         ) : (
-          <img className="block h-full w-full object-contain" src={asset.previewDataUrl} alt={`Preview of ${asset.filename}`} />
+          <img
+            className="block h-full w-full object-contain transition-transform group-hover:scale-[1.02]"
+            src={asset.previewDataUrl}
+            alt={`Preview of ${asset.filename}`}
+          />
         )}
       </div>
-      <p className="mt-2 truncate text-[11px] text-muted-foreground" title={asset.filename}>{asset.filename}</p>
+      <p className="mt-1.5 truncate text-[11px] font-medium text-foreground/80" title={asset.filename}>
+        {asset.filename}
+      </p>
     </div>
   );
 }
 
 function RiskBadge({ level }: { level: string }) {
   const styles = {
-    high: 'bg-red-100 text-red-800',
-    medium: 'bg-amber-100 text-amber-900',
-    low: 'bg-emerald-100 text-emerald-900',
+    high: 'bg-red-100 text-red-800 border-red-200',
+    medium: 'bg-amber-100 text-amber-900 border-amber-200',
+    low: 'bg-emerald-100 text-emerald-900 border-emerald-200',
   } as Record<string, string>;
-  return <span className={`inline-flex items-center gap-1.5 rounded px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-wider ${styles[level] ?? 'bg-muted text-muted-foreground'}`} data-testid={`status-risk-${level}`}><span className="status-dot bg-current" />{level}</span>;
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider ${
+        styles[level] ?? 'bg-muted text-muted-foreground border-border'
+      }`}
+      data-testid={`status-risk-${level}`}
+    >
+      <span className="status-dot bg-current" />
+      {level}
+    </span>
+  );
 }
 
-function Home() {
-  const projectsQuery = useListProjects({ query: { queryKey: getListProjectsQueryKey() } });
-  const projects = projectsQuery.data ?? [];
-  const [selectedId, setSelectedId] = useState<string>();
+// ─── Multi-Report Section ──────────────────────────────────────────────────
+
+type HistoricalReportItem = {
+  id: string;
+  projectId: string;
+  name: string;
+  summary: string;
+  counts: { high: number; medium: number; low: number };
+  analyzedAssets: number;
+  generatedAt: string;
+};
+
+function ProjectReportsSection({
+  projectId,
+  projectTitle,
+  latestReport,
+}: {
+  projectId: string;
+  projectTitle: string;
+  latestReport?: Report;
+}) {
+  const [reports, setReports] = useState<HistoricalReportItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchReports = async () => {
+    if (!projectId) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/reports`);
+      if (res.ok) {
+        const data = await res.json();
+        setReports(data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReports();
+  }, [projectId, latestReport]);
+
+  const handleExportPDF = async (reportItem: HistoricalReportItem) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/reports/${reportItem.id}`);
+      if (res.ok) {
+        const fullReport = await res.json();
+        exportReportToPDF(fullReport, projectTitle);
+      }
+    } catch (err) {
+      alert('Could not export report to PDF. Try again.');
+    }
+  };
+
+  return (
+    <div className="mt-10 pt-8 border-t border-border/80">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Reports</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Full clearance audit history recorded in ClickHouse for this production
+          </p>
+        </div>
+        {latestReport && (
+          <button
+            type="button"
+            onClick={() => exportReportToPDF(latestReport, projectTitle)}
+            className="inline-flex items-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+            data-testid="button-export-latest-pdf"
+          >
+            <Printer size={14} />
+            <span>Export Latest as PDF</span>
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="py-8 text-center text-xs text-muted-foreground">
+          <LoaderCircle size={16} className="animate-spin mx-auto mb-2 text-accent" />
+          Loading reports…
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="scan-grid mt-4 rounded-md p-8 text-center border border-border/60">
+          <ShieldAlert size={24} className="mx-auto text-muted-foreground" />
+          <p className="mt-2 text-sm font-semibold">No reports generated yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Add source assets above and click &quot;Run analysis&quot; to compile your first clearance audit.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {reports.map((r, idx) => (
+            <div
+              key={r.id}
+              className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-lg border border-border bg-card/60 p-4 transition-all hover:border-sidebar-primary/50 shadow-sm"
+              data-testid={`report-card-${r.id}`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2.5">
+                  <span className="font-mono text-[10px] uppercase font-bold text-muted-foreground">
+                    #{reports.length - idx}
+                  </span>
+                  <h3 className="font-semibold text-sm text-foreground truncate">{r.name}</h3>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{r.summary}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[10px] text-muted-foreground">
+                  <span>{formatDate(r.generatedAt)}</span>
+                  <span>·</span>
+                  <span>{r.analyzedAssets} assets</span>
+                  <span>·</span>
+                  <div className="flex items-center gap-1.5">
+                    {r.counts.high > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-bold">
+                        {r.counts.high} High
+                      </span>
+                    )}
+                    {r.counts.medium > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold">
+                        {r.counts.medium} Med
+                      </span>
+                    )}
+                    {r.counts.low > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 font-bold">
+                        {r.counts.low} Low
+                      </span>
+                    )}
+                    {r.counts.high === 0 && r.counts.medium === 0 && r.counts.low === 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Clean</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                <button
+                  type="button"
+                  onClick={() => handleExportPDF(r)}
+                  className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                  title="Export PDF"
+                  data-testid={`button-pdf-${r.id}`}
+                >
+                  <Download size={13} />
+                  <span>PDF</span>
+                </button>
+                <Link
+                  href={`/report/${projectId}`}
+                  className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+                  data-testid={`button-view-report-${r.id}`}
+                >
+                  <span>View Details</span>
+                  <ArrowUpRight size={13} />
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Home / Workspace View ─────────────────────────────────────────────────
+
+function Home({
+  projects,
+  selectedId,
+  setSelectedId,
+}: {
+  projects: Project[];
+  selectedId?: string;
+  setSelectedId: (id: string) => void;
+}) {
+  const { user } = useAuth();
+  const selectedProject = projects.find((project) => project.id === selectedId);
   const [uploadError, setUploadError] = useState('');
   const [analysisError, setAnalysisError] = useState('');
-  const selectedProject = projects.find((project) => project.id === selectedId);
-  const reportQuery = useGetProjectReport(selectedId ?? '', { query: { enabled: Boolean(selectedId && selectedProject?.reportStatus === 'ready'), queryKey: getGetProjectReportQueryKey(selectedId ?? '') } });
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitleValue, setEditTitleValue] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    setEditTitleValue(selectedProject?.title ?? '');
+    setIsEditingTitle(false);
+    setConfirmDelete(false);
+  }, [selectedProject?.id, selectedProject?.title]);
+
+  const reportQuery = useGetProjectReport(selectedId ?? '', {
+    query: {
+      enabled: Boolean(selectedId && selectedProject?.reportStatus === 'ready'),
+      queryKey: getGetProjectReportQueryKey(selectedId ?? ''),
+    },
+  });
+
   const uploadAsset = useUploadAsset();
   const deleteAsset = useDeleteAsset();
   const analyzeProject = useAnalyzeProject();
 
-  useEffect(() => {
-    if (!selectedId && projects[0]) setSelectedId(projects[0].id);
-    if (selectedId && projects.length > 0 && !projects.some((project) => project.id === selectedId)) setSelectedId(projects[0].id);
-  }, [projects, selectedId]);
+  const maxFileBytes = user?.maxFileSizeBytes ?? 100 * 1024 * 1024;
+  const limitLabel = user?.maxFileSizeLabel ?? '100 MB';
 
-  const handleFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
+  const handleRenameProject = async () => {
+    if (!selectedId || !editTitleValue.trim() || renaming) return;
+    setRenaming(true);
+    try {
+      const res = await fetch(`/api/projects/${selectedId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editTitleValue.trim() }),
+      });
+      if (!res.ok) throw new Error('Failed to update project title');
+      await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+      setIsEditingTitle(false);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Could not rename project'));
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!selectedId || deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/projects/${selectedId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete project');
+      await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+      const remaining = projects.filter((p) => p.id !== selectedId);
+      setSelectedId(remaining[0]?.id ?? '');
+      setConfirmDelete(false);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Could not delete project'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const resolveFileType = (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    if (
+      ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'avif'].includes(ext) ||
+      file.type.startsWith('image/')
+    ) {
+      return {
+        type: 'image' as const,
+        mimeType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext || 'png'}`,
+      };
+    }
+    if (
+      ['mp4', 'mov', 'avi', 'webm', 'mkv', 'm4v'].includes(ext) ||
+      file.type.startsWith('video/')
+    ) {
+      return {
+        type: 'video' as const,
+        mimeType: file.type || `video/${ext === 'mov' ? 'quicktime' : 'mp4'}`,
+      };
+    }
+    return {
+      type: 'script' as const,
+      mimeType: file.type || (ext === 'pdf' ? 'application/pdf' : 'text/plain'),
+    };
+  };
+
+  const processFiles = async (files: File[]) => {
     if (!selectedId || !files.length) return;
     setUploadError('');
+
     try {
       for (const file of files) {
+        if (file.size > maxFileBytes) {
+          throw new Error(
+            `"${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds your account limit (${limitLabel}). ${
+              user?.role === 'demo' ? 'Register for up to 400 MB.' : ''
+            }`
+          );
+        }
+
         const contentBase64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '');
           reader.onerror = () => reject(new Error('Unable to read file'));
           reader.readAsDataURL(file);
         });
-        const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'script';
+
+        const { type, mimeType } = resolveFileType(file);
         const dimensions = await getMediaDimensions(file, type);
-        await uploadAsset.mutateAsync({ projectId: selectedId, data: { filename: file.name, type, mimeType: file.type || 'application/octet-stream', contentBase64, ...dimensions } });
+
+        await uploadAsset.mutateAsync({
+          projectId: selectedId,
+          data: {
+            filename: file.name,
+            type,
+            mimeType,
+            contentBase64,
+            ...dimensions,
+          },
+        });
       }
+
       await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Upload failed. Try again.');
-    } finally {
-      event.target.value = '';
+      setUploadError(getErrorMessage(error, 'Upload failed. Try again.'));
     }
+  };
+
+  const handleFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    processFiles(files);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    processFiles(files);
   };
 
   const runAnalysis = () => {
     if (!selectedId || !selectedProject?.assetCount || analyzeProject.isPending) return;
     setAnalysisError('');
-    analyzeProject.mutate({ projectId: selectedId }, {
-      onSuccess: (report) => {
-        queryClient.setQueryData(getGetProjectReportQueryKey(selectedId), report);
-        queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
-      },
-      onError: (error) => setAnalysisError(getErrorMessage(error, 'Analysis could not be completed. Try again.')),
-    });
+    analyzeProject.mutate(
+      { projectId: selectedId },
+      {
+        onSuccess: (report) => {
+          queryClient.setQueryData(getGetProjectReportQueryKey(selectedId), report);
+          queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+        },
+        onError: (error) =>
+          setAnalysisError(getErrorMessage(error, 'Analysis could not be completed. Try again.')),
+      }
+    );
   };
-
-  if (projectsQuery.isLoading) return <LoadingScreen label="Loading workspace" />;
-  if (projectsQuery.isError) return <ErrorScreen message="The project desk could not be loaded." onRetry={() => projectsQuery.refetch()} />;
 
   return (
     <div className="min-h-[100dvh]">
-      <PageHeader eyebrow="RightScan" title="Know what needs a call before you shoot." />
-      <div className="mx-auto max-w-[1380px] px-5 py-6 sm:px-8 lg:px-12">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_355px]">
-          <div className="space-y-6">
-            <section className="rounded-lg bg-card p-5 sm:p-6">
-              <div className="flex flex-col justify-between gap-4 pb-5 sm:flex-row sm:items-start">
-                <div>
-                  <h2 className="text-lg font-semibold tracking-tight">Upload your assets</h2>
-                </div>
-                {selectedProject && <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{selectedProject.assetCount} {selectedProject.assetCount === 1 ? 'asset' : 'assets'} in set</span>}
-              </div>
-              {!selectedProject ? (
-                <div className="scan-grid mt-5 rounded-md p-8 text-center sm:p-12">
-                  <FolderOpen size={24} className="mx-auto text-muted-foreground" />
-                  <h3 className="mt-3 font-medium">Start with a project</h3>
-                  <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">Name the production in the project picker, then drop in the material you want cleared.</p>
-                </div>
-              ) : (
-                <>
-                    <label className={`mt-5 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-accent/40 bg-accent/[0.035] px-5 py-7 text-center transition-colors hover:bg-accent/[0.07] ${uploadAsset.isPending ? 'pointer-events-none opacity-70' : ''}`} data-testid="dropzone-assets">
-                    <input type="file" multiple className="sr-only" accept=".pdf,.doc,.docx,.txt,.rtf,image/*,video/*" onChange={handleFiles} data-testid="input-assets" />
-                    {uploadAsset.isPending ? <LoaderCircle size={24} className="animate-spin text-accent" /> : <UploadCloud size={24} className="text-accent" />}
-                    <span className="mt-3 text-sm font-medium">{uploadAsset.isPending ? 'Adding material to the set…' : 'Drop files here or browse'}</span>
-                    <span className="mt-1 text-xs text-muted-foreground">PDF, DOCX, TXT, JPG, PNG, or MP4 · clips under 100 MB</span>
-                  </label>
-                  {uploadError && <div className="mt-3 flex items-center gap-2 text-xs text-destructive" data-testid="status-upload-error"><AlertTriangle size={14} />{uploadError}</div>}
-                   {selectedProject.assets.filter((asset) => asset.type === 'image' || asset.type === 'video').length > 0 && (
-                     <div className="mt-5 pt-5">
-                       <div className="flex items-center justify-between gap-3">
-                          <p className="retro-kicker text-muted-foreground">Uploaded assets</p>
-                       </div>
-                       <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                         {selectedProject.assets.filter((asset) => asset.type === 'image' || asset.type === 'video').map((asset) => (
-                           <MediaAssetPreview
-                             key={asset.id}
-                             asset={asset}
-                             removing={deleteAsset.isPending && deleteAsset.variables?.assetId === asset.id}
-                             onRemove={() => {
-                               if (!window.confirm(`Remove ${asset.filename} from this review set?`)) return;
-                               const projectId = selectedId;
-                               if (!projectId) return;
-                               deleteAsset.mutate({ projectId, assetId: asset.id }, {
-                                 onSuccess: () => {
-                                   queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
-                                   queryClient.invalidateQueries({ queryKey: getGetProjectReportQueryKey(projectId) });
-                                 },
-                               });
-                             }}
-                           />
-                         ))}
-                       </div>
-                     </div>
-                   )}
-                  <div className="mt-5 space-y-2">
-                    {selectedProject.assetCount === 0 ? <div className="flex items-center gap-3 py-4 text-sm text-muted-foreground"><CircleDashed size={17} />Nothing added yet. The first pass starts with source material.</div> : <div className="flex items-center gap-3 py-3 text-sm text-muted-foreground"><Check size={17} className="text-emerald-700" />{selectedProject.assetCount} source {selectedProject.assetCount === 1 ? 'file is' : 'files are'} ready for analysis.</div>}
-                  </div>
-                </>
-              )}
-              <div className="mt-8">
-                <button type="button" onClick={runAnalysis} disabled={!selectedProject?.assetCount || analyzeProject.isPending} className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40" data-testid="button-run-analysis">
-                  {analyzeProject.isPending ? <><LoaderCircle size={15} className="animate-spin" /> Analyzing…</> : <><Play size={14} fill="currentColor" /> Run analysis</>}
-                </button>
-                <div className="mt-5 flex items-center gap-4 rounded-md bg-muted/55 px-4 py-3">
-                <div className={`grid size-9 place-items-center rounded-full ${analyzeProject.isPending ? 'bg-accent text-accent-foreground' : selectedProject?.reportStatus === 'ready' ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
-                  {analyzeProject.isPending ? <Activity size={17} className="animate-pulse" /> : selectedProject?.reportStatus === 'ready' ? <Check size={17} /> : <ScanSearch size={17} />}
-                </div>
+      {/* If guest / not logged in, display the full Retro Film Landing & Auth Hero */}
+      {!user ? (
+        <RetroLandingHero />
+      ) : (
+        /* Authenticated: Inside the Project Workspace */
+        <div className="mx-auto max-w-[1380px] px-5 py-8 sm:px-8 lg:px-12">
+          <div className="space-y-8">
+            <section className="rounded-xl border border-border/80 bg-card p-6 sm:p-8 shadow-sm">
+              {/* Project Workspace Slate Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{analyzeProject.isPending ? 'Reading the review set' : selectedProject?.reportStatus === 'ready' ? 'Scan complete' : 'Waiting for a first pass'}</p>
-                  {analyzeProject.isPending && <p className="mt-0.5 text-xs text-muted-foreground">This can take a moment. Keep this desk open.</p>}
-                  {!analyzeProject.isPending && selectedProject?.reportStatus !== 'ready' && <p className="mt-0.5 text-xs text-muted-foreground">Add at least one asset to enable analysis.</p>}
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-accent-foreground font-semibold">
+                    PRODUCTION WORKSPACE
+                  </span>
+                  {!isEditingTitle ? (
+                    <div className="flex items-center gap-2.5 mt-1">
+                      <h2 className="text-2xl font-bold tracking-tight text-foreground truncate">
+                        {selectedProject ? selectedProject.title : 'Select or Create a Project to Start'}
+                      </h2>
+                      {selectedProject && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditTitleValue(selectedProject.title);
+                            setIsEditingTitle(true);
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded transition-colors"
+                          title="Rename project"
+                          data-testid="button-edit-project-title"
+                        >
+                          <Edit3 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <input
+                        type="text"
+                        value={editTitleValue}
+                        onChange={(e) => setEditTitleValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRenameProject();
+                          if (e.key === 'Escape') setIsEditingTitle(false);
+                        }}
+                        className="rounded border border-primary bg-background px-3 py-1 text-base font-bold text-foreground outline-none ring-1 ring-primary min-w-[240px]"
+                        autoFocus
+                        data-testid="input-edit-project-title"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRenameProject}
+                        disabled={renaming || !editTitleValue.trim()}
+                        className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                        data-testid="button-save-project-title"
+                      >
+                        {renaming ? <LoaderCircle size={13} className="animate-spin" /> : <Check size={13} />}
+                        <span>Save</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingTitle(false)}
+                        disabled={renaming}
+                        className="rounded border border-border p-1.5 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  )}
+                  {selectedProject && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Created {formatDate(selectedProject.createdAt)} · Chain-of-Title Audit Active
+                    </p>
+                  )}
                 </div>
-                {analyzeProject.isPending && <div className="h-1 w-16 overflow-hidden rounded bg-accent/20"><div className="pulse-bar h-full origin-left rounded bg-accent" /></div>}
-                </div>
-                {analysisError && <div className="mt-3 flex items-start gap-2 rounded-md bg-destructive/10 px-4 py-3 text-xs leading-relaxed text-destructive" data-testid="status-analysis-error"><AlertTriangle size={14} className="mt-0.5 shrink-0" /><span>{analysisError}</span></div>}
+
+                {selectedProject && (
+                  <div className="flex items-center gap-2 self-start sm:self-center">
+                    <div className="rounded border border-border bg-muted/40 px-3 py-1.5 text-center">
+                      <span className="block font-mono text-[9px] uppercase text-muted-foreground">Assets</span>
+                      <span className="font-bold text-sm">{selectedProject.assetCount}</span>
+                    </div>
+                    <div className="rounded border border-border bg-muted/40 px-3 py-1.5 text-center">
+                      <span className="block font-mono text-[9px] uppercase text-muted-foreground">Findings</span>
+                      <span className="font-bold text-sm">{selectedProject.detectionCount}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
-            <LatestReport report={reportQuery.data} loading={reportQuery.isLoading} error={reportQuery.isError} project={selectedProject} />
-            </section>
-          </div>
-
-          <aside className="space-y-6">
-            <section className="rounded-lg bg-card p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold tracking-tight">{selectedProject ? 'Current project' : 'Select a Project'}</h2>
-                </div>
+            {!selectedProject ? (
+              <div className="scan-grid mt-8 rounded-lg p-10 text-center border border-dashed border-border sm:p-14">
+                <FolderOpen size={30} className="mx-auto text-muted-foreground" />
+                <h3 className="mt-3 font-semibold text-base">Select a project from the left sidebar</h3>
+                <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+                  Pick an existing production or create a new project slate on the left to begin uploading clearance assets.
+                </p>
               </div>
-              <div className="mt-5"><ProjectPicker projects={projects} selectedId={selectedId} onSelect={setSelectedId} onCreated={(project) => { setSelectedId(project.id); queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() }); }} /></div>
-            </section>
-          </aside>
+            ) : (
+              <>
+                {/* Upload Section */}
+                <div className="mt-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground font-mono">
+                      1. Upload Production Materials
+                    </h3>
+                    <span className="font-mono text-[10px] text-accent-foreground font-semibold bg-accent/15 px-2 py-0.5 rounded border border-accent/30">
+                      Tier Limit: {limitLabel} per file
+                    </span>
+                  </div>
+
+                  <label
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                    className={`flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-all px-5 py-8 text-center ${
+                      isDragging
+                        ? 'border-primary bg-primary/10 scale-[1.01]'
+                        : 'border-accent/40 bg-accent/[0.035] hover:bg-accent/[0.08] hover:border-accent'
+                    } ${uploadAsset.isPending ? 'pointer-events-none opacity-70' : ''}`}
+                    data-testid="dropzone-assets"
+                  >
+                    <input
+                      type="file"
+                      multiple
+                      className="sr-only"
+                      accept=".pdf,.doc,.docx,.txt,.rtf,image/*,video/*"
+                      onChange={handleFiles}
+                      data-testid="input-assets"
+                    />
+                    {uploadAsset.isPending ? (
+                      <LoaderCircle size={28} className="animate-spin text-accent" />
+                    ) : (
+                      <UploadCloud size={28} className="text-accent" />
+                    )}
+                    <span className="mt-3 text-sm font-semibold">
+                      {uploadAsset.isPending
+                        ? 'Ingesting material into Cloudinary…'
+                        : isDragging
+                        ? 'Release to upload files now'
+                        : 'Drop files here or browse media'}
+                    </span>
+                    <span className="mt-1 text-xs text-muted-foreground">
+                      Scripts (PDF, TXT, DOCX), Stills (PNG, JPG), or Clips (MP4, MOV) · up to {limitLabel}
+                    </span>
+                  </label>
+
+                  {uploadError && (
+                    <div
+                      className="mt-3 flex items-center gap-2 rounded bg-destructive/10 p-3 text-xs text-destructive"
+                      data-testid="status-upload-error"
+                    >
+                      <AlertTriangle size={15} className="shrink-0" />
+                      <span>{uploadError}</span>
+                    </div>
+                  )}
+
+                  {/* Asset Previews */}
+                  {selectedProject.assets.filter((a) => a.type === 'image' || a.type === 'video').length > 0 && (
+                    <div className="mt-6 pt-5 border-t border-border/60">
+                      <p className="retro-kicker text-muted-foreground mb-3">Ingested Footage & Imagery</p>
+                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+                        {selectedProject.assets
+                          .filter((asset) => asset.type === 'image' || asset.type === 'video')
+                          .map((asset) => (
+                            <MediaAssetPreview
+                              key={asset.id}
+                              asset={asset}
+                              removing={deleteAsset.isPending && deleteAsset.variables?.assetId === asset.id}
+                              onRemove={() => {
+                                if (!window.confirm(`Remove ${asset.filename} from review set?`)) return;
+                                deleteAsset.mutate({
+                                  projectId: selectedProject.id,
+                                  assetId: asset.id,
+                                });
+                              }}
+                            />
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-4">
+                    {selectedProject.assetCount === 0 ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <CircleDashed size={15} />
+                        <span>No files added yet. Drop scripts, clips, or props photos to begin.</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-xs text-emerald-700 font-medium">
+                        <Check size={15} />
+                        <span>
+                          {selectedProject.assetCount} source {selectedProject.assetCount === 1 ? 'file' : 'files'} ready for clearance inspection.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Analysis Action */}
+                <div className="mt-8 pt-6 border-t border-border/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground font-mono">
+                        2. Clearance inspection
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Invokes Gemini ADK with dynamic tool selection (logos, script text, audio transcripts, and closer-look passes)
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={runAnalysis}
+                      disabled={!selectedProject?.assetCount || analyzeProject.isPending}
+                      className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-md transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                      data-testid="button-run-analysis"
+                    >
+                      {analyzeProject.isPending ? (
+                        <>
+                          <LoaderCircle size={15} className="animate-spin" />
+                          <span>Agent Inspecting Assets…</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play size={14} fill="currentColor" />
+                          <span>Run clearance Scan</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Progress Indicator */}
+                  <div className="mt-4 flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+                    <div
+                      className={`grid size-8 place-items-center rounded-full ${
+                        analyzeProject.isPending
+                          ? 'bg-accent text-accent-foreground animate-pulse'
+                          : selectedProject?.reportStatus === 'ready'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-secondary text-muted-foreground'
+                      }`}
+                    >
+                      {analyzeProject.isPending ? (
+                        <Activity size={16} className="animate-pulse" />
+                      ) : selectedProject?.reportStatus === 'ready' ? (
+                        <Check size={16} />
+                      ) : (
+                        <ScanSearch size={16} />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1 text-xs">
+                      <p className="font-semibold text-foreground">
+                        {analyzeProject.isPending
+                          ? 'Autonomous clearance agent executing multi-tool analysis…'
+                          : selectedProject?.reportStatus === 'ready'
+                          ? 'Scan complete — findings archived in ClickHouse'
+                          : 'Awaiting source material'}
+                      </p>
+                      <p className="text-muted-foreground mt-0.5">
+                        {analyzeProject.isPending
+                          ? 'Extracting entities, checking trademark databases, and scoring risk.'
+                          : 'Add files and trigger analysis to generate a clearance report.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {analysisError && (
+                    <div
+                      className="mt-3 flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-xs text-destructive"
+                      data-testid="status-analysis-error"
+                    >
+                      <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                      <span>{analysisError}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Reports Section (Shows all reports for this project) */}
+                <ProjectReportsSection
+                  projectId={selectedProject.id}
+                  projectTitle={selectedProject.title}
+                  latestReport={reportQuery.data}
+                />
+
+                {/* Danger Zone: Delete Project (Bottom most place) */}
+                <div className="mt-12 pt-6 border-t border-destructive/20 bg-destructive/[0.02] rounded-lg p-5 border border-dashed">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-destructive">
+                        Delete Production Project
+                      </h4>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Permanently remove this production, including all uploaded materials and historical clearance reports.
+                      </p>
+                    </div>
+
+                    {!confirmDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(true)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3.5 py-2 text-xs font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors self-start sm:self-center"
+                        data-testid="button-trigger-delete-project"
+                      >
+                        <Trash2 size={13} />
+                        <span>Delete Project</span>
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
+                        <span className="text-xs font-medium text-destructive">Confirm deletion?</span>
+                        <button
+                          type="button"
+                          onClick={handleDeleteProject}
+                          disabled={deleting}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-destructive px-3.5 py-2 text-xs font-bold text-destructive-foreground shadow hover:opacity-90 disabled:opacity-50"
+                          data-testid="button-confirm-delete-project"
+                        >
+                          {deleting ? <LoaderCircle size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                          <span>Yes, Delete</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(false)}
+                          disabled={deleting}
+                          className="rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </section>
         </div>
       </div>
+      )}
     </div>
   );
 }
 
-function LatestReport({ report, loading, error, project }: { report?: Report; loading: boolean; error: boolean; project?: Project }) {
-  return (
-    <div className="mt-8">
-      <div className="flex items-start justify-between gap-4 pb-5">
-        <div><h2 className="text-lg font-semibold tracking-tight">Scan Results</h2></div>
-        {report && project && <Link href={`/report/${project.id}`} className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline" data-testid="link-report-details">View details <ArrowUpRight size={13} /></Link>}
-      </div>
-      {loading ? <div className="space-y-3 py-5"><div className="h-4 w-1/3 animate-pulse rounded bg-muted" /><div className="h-10 w-full animate-pulse rounded bg-muted" /></div> : error ? <div className="flex items-center gap-2 py-6 text-sm text-destructive"><AlertTriangle size={15} />No saved report is available for this project yet.</div> : !report ? <div className="scan-grid mt-5 rounded-md p-8 text-center"><ShieldAlert size={23} className="mx-auto text-muted-foreground" /><p className="mt-3 text-sm font-medium">The report will land here.</p><p className="mt-1 text-xs text-muted-foreground">Run an analysis after adding source material.</p></div> : <ReportSummary report={report} />}
-      {project && <div className="mt-6 flex justify-end"><Link href={`/report/${project.id}`} className="inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90" data-testid="link-open-report">Open saved report <ArrowUpRight size={15} /></Link></div>}
-    </div>
-  );
-}
-
-function ReportSummary({ report }: { report: Report }) {
-  const categoryCounts = report.detections.reduce<Record<string, number>>((counts, detection) => {
-    counts[detection.category] = (counts[detection.category] ?? 0) + 1;
-    return counts;
-  }, {});
-  const categoryEntries = Object.entries(categoryCounts).sort(([, a], [, b]) => b - a);
-  const levelStyles = {
-    high: 'text-red-700',
-    medium: 'text-amber-700',
-    low: 'text-emerald-700',
-  } as const;
-  return (
-    <div className="mt-5">
-      <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground" data-testid="text-report-summary">{report.summary}</p>
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs" data-testid="summary-detection-types">
-        <span className="font-medium text-foreground">Detected:</span>
-        {categoryEntries.length > 0 ? categoryEntries.map(([category, count]) => <span className="rounded-md bg-muted/65 px-2.5 py-1.5 text-muted-foreground" key={category}>{count} {categoryLabel(category)}{count === 1 ? '' : 's'}</span>) : <span className="text-muted-foreground">No included signals</span>}
-      </div>
-      <div className="mt-5 overflow-hidden rounded-md bg-muted/45" data-testid="summary-risk-table">
-        <div className="grid grid-cols-[1fr_auto] gap-4 px-4 py-2.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-          <span>Risk level</span>
-          <span>References detected</span>
-        </div>
-        {(['high', 'medium', 'low'] as const).map((level) => (
-          <div className="grid grid-cols-[1fr_auto] items-center gap-4 border-t border-background/50 bg-muted/65 px-4 py-3" key={level} data-testid={`stat-${level}-count`}>
-            <span className={`font-semibold uppercase tracking-wide ${levelStyles[level]}`}>{level}</span>
-            <span className="text-lg font-semibold tracking-tight">{report.counts[level]}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// ─── Single Report Page ────────────────────────────────────────────────────
 
 function ReportPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [, setLocation] = useLocation();
-  const reportQuery = useGetProjectReport(projectId ?? '', { query: { enabled: Boolean(projectId), queryKey: getGetProjectReportQueryKey(projectId ?? '') } });
   const projectsQuery = useListProjects({ query: { queryKey: getListProjectsQueryKey() } });
   const project = projectsQuery.data?.find((item) => item.id === projectId);
+
+  const reportQuery = useGetProjectReport(projectId ?? '', {
+    query: {
+      enabled: Boolean(projectId),
+      queryKey: getGetProjectReportQueryKey(projectId ?? ''),
+    },
+  });
+
   const detections = useMemo(() => reportQuery.data?.detections ?? [], [reportQuery.data?.detections]);
   const [filter, setFilter] = useState('all');
-  const filtered = filter === 'all' ? detections : detections.filter((detection) => detection.riskLevel === filter);
+  const filtered = filter === 'all' ? detections : detections.filter((d) => d.riskLevel === filter);
+
   return (
     <div className="min-h-[100dvh]">
-      <PageHeader eyebrow="RightScan report" title={project?.title ?? 'Clearance report'} description={reportQuery.data ? `Generated ${formatDate(reportQuery.data.generatedAt)} · ${reportQuery.data.analyzedAssets} assets analyzed` : 'A source-linked view of the latest clearance pass.'} action={<button type="button" onClick={() => setLocation('/')} className="inline-flex items-center gap-2 self-start text-sm font-medium text-muted-foreground hover:text-foreground lg:self-auto" data-testid="button-back-workspace"><ArrowLeft size={15} /> Back to workspace</button>} />
-      <div className="mx-auto max-w-[1380px] px-5 py-6 sm:px-8 lg:px-12">
-        {reportQuery.isLoading ? <LoadingScreen label="Loading report" /> : reportQuery.isError || !reportQuery.data ? <ErrorScreen message="This report is not available yet." onRetry={() => reportQuery.refetch()} backHref="/" /> : (
+      <header className="px-5 py-7 sm:px-8 sm:py-9 lg:px-12 border-b border-border/80 bg-card/40">
+        <div className="mx-auto flex max-w-[1380px] flex-col justify-between gap-5 lg:flex-row lg:items-end">
+          <div>
+            <p className="retro-kicker text-accent">RightScan Clearance Audit</p>
+            <h1 className="mt-1 text-[clamp(1.8rem,3vw,2.5rem)] font-bold tracking-tight">
+              {project?.title ?? 'Production Clearance Report'}
+            </h1>
+            {reportQuery.data && (
+              <p className="mt-1 text-xs text-muted-foreground font-mono">
+                Generated {formatDate(reportQuery.data.generatedAt)} · {reportQuery.data.analyzedAssets} source assets reviewed
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {reportQuery.data && (
+              <button
+                type="button"
+                onClick={() => exportReportToPDF(reportQuery.data!, project?.title ?? 'Clearance Report')}
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow hover:opacity-90 transition-opacity"
+                data-testid="button-export-pdf"
+              >
+                <Printer size={14} />
+                <span>Export as PDF</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setLocation('/')}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              data-testid="button-back-workspace"
+            >
+              <ArrowLeft size={14} />
+              <span>Back to Workspace</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-[1380px] px-5 py-8 sm:px-8 lg:px-12">
+        {reportQuery.isLoading ? (
+          <LoadingScreen label="Loading clearance audit…" />
+        ) : !reportQuery.data ? (
           <div className="space-y-6">
-            <section className="rounded-lg bg-card p-5 sm:p-7">
-              <div className="flex flex-col justify-between gap-5 pb-6 lg:flex-row lg:items-start">
-                <div className="max-w-2xl"><p className="text-[clamp(1.5rem,3vw,2.5rem)] font-semibold leading-tight tracking-[-0.035em] text-foreground">{reportQuery.data.summary}</p></div>
-                <div className="grid grid-cols-3 gap-2 lg:min-w-[305px]">{(['high', 'medium', 'low'] as const).map((level) => <div className="bg-muted/65 px-3 py-3" key={level} data-testid={`report-stat-${level}`}><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{level}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{reportQuery.data.counts[level]}</p></div>)}</div>
+            <div className="rounded-xl border border-dashed border-border bg-card/60 p-10 text-center">
+              <FileText size={36} className="mx-auto text-muted-foreground/60 mb-3" />
+              <h3 className="text-base font-bold text-foreground">No reports generated yet</h3>
+              <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+                Add source assets in the workspace and click "Run clearance Scan" to compile your first clearance audit.
+              </p>
+              <div className="mt-5">
+                <Link
+                  href="/"
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
+                >
+                  <span>Open Production Workspace</span>
+                  <ArrowUpRight size={14} />
+                </Link>
+              </div>
+            </div>
+
+            <ProjectReportsSection
+              projectId={projectId ?? ''}
+              projectTitle={project?.title ?? 'Production'}
+            />
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Risk Summary Banner */}
+            <section className="rounded-xl border border-border bg-card p-6 sm:p-7 shadow-sm">
+              <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
+                <div className="max-w-2xl">
+                  <p className="text-[clamp(1.2rem,2.5vw,1.8rem)] font-semibold leading-snug tracking-tight text-foreground">
+                    {reportQuery.data.summary}
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-3 min-w-[280px]">
+                  {(['high', 'medium', 'low'] as const).map((level) => (
+                    <div
+                      key={level}
+                      className={`rounded-lg border p-3 text-center ${
+                        level === 'high'
+                          ? 'bg-red-50/70 border-red-200 text-red-900'
+                          : level === 'medium'
+                          ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                          : 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                      }`}
+                      data-testid={`report-stat-${level}`}
+                    >
+                      <p className="font-mono text-[9px] uppercase font-bold tracking-wider opacity-75">{level}</p>
+                      <p className="mt-1 text-2xl font-bold tracking-tight">{reportQuery.data.counts[level]}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
-            <section className="rounded-lg bg-card">
-              <div className="flex flex-col justify-between gap-4 px-5 py-5 sm:flex-row sm:items-center sm:px-7">
-                <div><h2 className="text-lg font-semibold tracking-tight">Detailed analysis of potential issues</h2></div>
-                <div className="flex items-center gap-1 rounded-md bg-muted p-1">{['all', 'high', 'medium', 'low'].map((value) => <button type="button" key={value} onClick={() => setFilter(value)} className={`rounded px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-wider transition-colors ${filter === value ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid={`button-filter-${value}`}>{value}</button>)}</div>
+
+            {/* Findings List with Risk Filter */}
+            <section className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border px-6 py-4">
+                <div>
+                  <h2 className="text-base font-bold tracking-tight">Intellectual Property & Trademark Detections</h2>
+                  <p className="text-xs text-muted-foreground">Click any finding to inspect evidence and legal rationale</p>
+                </div>
+                <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 p-1">
+                  {['all', 'high', 'medium', 'low'].map((value) => (
+                    <button
+                      type="button"
+                      key={value}
+                      onClick={() => setFilter(value)}
+                      className={`rounded px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider font-bold transition-colors ${
+                        filter === value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                      data-testid={`button-filter-${value}`}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
               </div>
-              {filtered.length === 0 ? <div className="p-10 text-center text-sm text-muted-foreground">No detections in this view.</div> : <div>{filtered.map((detection, index) => <DetectionRow detection={detection} previews={reportQuery.data.previews} index={index} key={detection.id} />)}</div>}
+
+              {filtered.length === 0 ? (
+                <div className="p-12 text-center text-sm text-muted-foreground">No detections in this filter view.</div>
+              ) : (
+                <div className="divide-y divide-border/60">
+                  {filtered.map((detection, index) => (
+                    <DetectionRow
+                      detection={detection}
+                      previews={reportQuery.data.previews}
+                      index={index}
+                      key={detection.id}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
+
+            {/* Agent Reasoning Panel */}
+            <AgentReasoningPanel toolCalls={(reportQuery.data as any).toolCalls} />
           </div>
         )}
       </div>
@@ -470,79 +1480,499 @@ function ReportPage() {
   );
 }
 
-function DetectionRow({ detection, previews, index }: { detection: Detection; previews: Report['previews']; index: number }) {
+function DetectionRow({
+  detection,
+  previews,
+  index,
+}: {
+  detection: Detection;
+  previews: Report['previews'];
+  index: number;
+}) {
   const [expanded, setExpanded] = useState(index === 0 && detection.riskLevel === 'high');
   const preview = previews.find((item) => item.assetId === detection.assetId);
+
   return (
-    <article className="px-5 py-5 sm:px-7" data-testid={`row-detection-${detection.id}`}>
-      <button type="button" onClick={() => setExpanded((value) => !value)} className="flex w-full items-start justify-between gap-4 text-left" data-testid={`button-expand-detection-${detection.id}`}>
+    <article className="p-5 sm:px-6 transition-colors hover:bg-muted/20" data-testid={`row-detection-${detection.id}`}>
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        className="flex w-full items-start justify-between gap-4 text-left"
+        data-testid={`button-expand-detection-${detection.id}`}
+      >
         <div className="flex min-w-0 gap-3.5">
-          <span className={`mt-1 grid size-8 shrink-0 place-items-center rounded ${detection.riskLevel === 'high' ? 'bg-red-100 text-red-800' : detection.riskLevel === 'medium' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'}`}><ShieldAlert size={15} /></span>
-          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{detection.name}</h3><span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{categoryLabel(detection.category)}</span></div><p className="mt-1 text-xs text-muted-foreground">{detection.sourceRef} · {Math.round(detection.confidence * 100)}% confidence</p></div>
+          <span
+            className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-md ${
+              detection.riskLevel === 'high'
+                ? 'bg-red-100 text-red-800'
+                : detection.riskLevel === 'medium'
+                ? 'bg-amber-100 text-amber-900'
+                : 'bg-emerald-100 text-emerald-900'
+            }`}
+          >
+            <ShieldAlert size={16} />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-bold text-sm text-foreground">{detection.name}</h3>
+              <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                {categoryLabel(detection.category)}
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {detection.sourceRef} · {Math.round(detection.confidence * 100)}% confidence
+            </p>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-3"><RiskBadge level={detection.riskLevel} /><ChevronDown size={15} className={`text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} /></div>
+        <div className="flex shrink-0 items-center gap-3">
+          <RiskBadge level={detection.riskLevel} />
+          <ChevronDown
+            size={15}
+            className={`text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`}
+          />
+        </div>
       </button>
-      {expanded && <div className="ml-[46px] mt-4 grid gap-5 pl-4 sm:grid-cols-[1.1fr_1fr] fade-up"><div><EvidencePreview detection={detection} preview={preview} /><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Context</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">“{detection.contextSnippet}”</p><div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">{detection.prominence && <span>Prominence: {detection.prominence}</span>}{detection.duration && <span>Duration: {detection.duration}</span>}{detection.sentiment && <span>Sentiment: {detection.sentiment}</span>}{detection.narrativeRole && <span>Role: {detection.narrativeRole}</span>}</div>{detection.visualEvidence && <p className="mt-4 text-xs leading-relaxed text-muted-foreground"><span className="font-medium text-foreground">Visual evidence:</span> {detection.visualEvidence}</p>}</div><div><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Why it matters</p><p className="mt-2 text-sm leading-relaxed text-foreground/80">{detection.rationale}</p>{detection.frameReference && <p className="mt-4 text-xs text-muted-foreground">Preview anchored to the {detection.frameReference.toLowerCase()}.</p>}</div></div>}
+
+      {expanded && (
+        <div className="ml-[42px] mt-4 grid gap-5 border-l-2 border-border pl-4 sm:grid-cols-[1.1fr_1fr] fade-up">
+          <div>
+            <EvidencePreview detection={detection} preview={preview} />
+            <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Context Snippet</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-foreground/85 italic bg-muted/30 p-2.5 rounded border border-border/50">
+              &ldquo;{detection.contextSnippet}&rdquo;
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-muted-foreground font-mono">
+              {detection.prominence && <span className="bg-muted px-2 py-0.5 rounded">Prominence: {detection.prominence}</span>}
+              {detection.duration && <span className="bg-muted px-2 py-0.5 rounded">Duration: {detection.duration}</span>}
+              {detection.sentiment && <span className="bg-muted px-2 py-0.5 rounded">Sentiment: {detection.sentiment}</span>}
+              {detection.narrativeRole && <span className="bg-muted px-2 py-0.5 rounded">Role: {detection.narrativeRole}</span>}
+            </div>
+          </div>
+          <div>
+            <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Legal Clearance Rationale</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-foreground/85">
+              {detection.rationale}
+            </p>
+            {detection.visualEvidence && (
+              <div className="mt-3 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">Visual Evidence:</span> {detection.visualEvidence}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </article>
   );
 }
 
-function EvidencePreview({ detection, preview }: { detection: Detection; preview?: Report['previews'][number] }) {
+function EvidencePreview({
+  detection,
+  preview,
+}: {
+  detection: Detection;
+  preview?: Report['previews'][number];
+}) {
   if (!preview) return null;
   const box = detection.boundingBox;
   const hasBox = Boolean(box && preview.width > 0 && preview.height > 0);
-  const style = hasBox && box ? {
-    left: `${(box.left / preview.width) * 100}%`,
-    top: `${(box.top / preview.height) * 100}%`,
-    width: `${((box.right - box.left) / preview.width) * 100}%`,
-    height: `${((box.bottom - box.top) / preview.height) * 100}%`,
-  } : undefined;
+  const style =
+    hasBox && box
+      ? {
+          left: `${(box.left / preview.width) * 100}%`,
+          top: `${(box.top / preview.height) * 100}%`,
+          width: `${((box.right - box.left) / preview.width) * 100}%`,
+          height: `${((box.bottom - box.top) / preview.height) * 100}%`,
+        }
+      : undefined;
+
   return (
-    <div className="mb-5">
-      <p className="retro-kicker mb-2 text-muted-foreground">Source preview</p>
-      <div className="relative max-w-[460px] overflow-hidden rounded-md bg-primary/10" style={preview.width > 0 && preview.height > 0 ? { aspectRatio: `${preview.width} / ${preview.height}` } : undefined}>
-        {preview.type === 'video' ? <video className="block h-full w-full object-contain" src={preview.dataUrl} controls preload="metadata" aria-label={`Preview of ${preview.filename}`} /> : <img className="block h-full w-full object-contain" src={preview.dataUrl} alt={`Preview of ${preview.filename}`} />}
-        {style && <span aria-label={`Bounding box for ${detection.name}`} className="pointer-events-none absolute border border-emerald-500" style={style}><span className="absolute -top-5 left-[-1px] whitespace-nowrap bg-emerald-600 px-1.5 py-0.5 font-mono text-[9px] font-bold text-white">{detection.name}</span></span>}
+    <div className="mb-4">
+      <p className="retro-kicker mb-1.5 text-muted-foreground">Source Evidence Frame</p>
+      <div
+        className="relative max-w-[420px] overflow-hidden rounded-md border border-border bg-black"
+        style={preview.width > 0 && preview.height > 0 ? { aspectRatio: `${preview.width} / ${preview.height}` } : undefined}
+      >
+        {preview.type === 'video' ? (
+          <video
+            className="block h-full w-full object-contain"
+            src={preview.dataUrl}
+            controls
+            preload="metadata"
+            aria-label={`Preview of ${preview.filename}`}
+          />
+        ) : (
+          <img
+            className="block h-full w-full object-contain"
+            src={preview.dataUrl}
+            alt={`Preview of ${preview.filename}`}
+          />
+        )}
+        {style && (
+          <span
+            aria-label={`Bounding box for ${detection.name}`}
+            className="pointer-events-none absolute border-2 border-emerald-400 shadow-sm"
+            style={style}
+          >
+            <span className="absolute -top-5 left-[-2px] whitespace-nowrap bg-emerald-600 px-1.5 py-0.5 font-mono text-[9px] font-bold text-white shadow">
+              {detection.name}
+            </span>
+          </span>
+        )}
       </div>
-      <p className="mt-2 text-[11px] text-muted-foreground">{preview.filename}{preview.type === 'video' ? ' · first detected sequence' : ' · detected frame'}</p>
+      <p className="mt-1 text-[10px] text-muted-foreground font-mono">
+        {preview.filename}
+      </p>
     </div>
   );
 }
 
-function LoadingScreen({ label }: { label: string }) {
-  return <div className="flex min-h-[40vh] items-center justify-center"><div className="text-center"><LoaderCircle size={22} className="mx-auto animate-spin text-accent" /><p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground" data-testid="status-loading">{label}</p></div></div>;
-}
+// ─── Agent Reasoning Panel ─────────────────────────────────────────────────
 
-function ErrorScreen({ message, onRetry, backHref }: { message: string; onRetry: () => void; backHref?: string }) {
-  return <div className="flex min-h-[55vh] items-center justify-center px-5"><div className="max-w-sm text-center"><div className="mx-auto grid size-10 place-items-center rounded-full bg-red-100 text-red-800"><AlertTriangle size={19} /></div><h2 className="mt-4 text-lg font-semibold">Something interrupted the desk.</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground" data-testid="status-error">{message}</p><div className="mt-5 flex items-center justify-center gap-2"><button type="button" onClick={onRetry} className="inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground" data-testid="button-retry"><RefreshCcw size={14} /> Try again</button>{backHref && <Link href={backHref} className="rounded-md px-3.5 py-2 text-sm font-medium" data-testid="link-error-back">Back</Link>}</div></div></div>;
-}
+type ToolCallEntry = { timestamp: string; tool: string; args: Record<string, unknown>; result_summary: string };
 
-function Router() {
+function AgentReasoningPanel({ toolCalls }: { toolCalls?: ToolCallEntry[] }) {
+  const [open, setOpen] = useState(false);
+  if (!toolCalls || toolCalls.length === 0) return null;
+
+  const toolColors: Record<string, string> = {
+    extract_script_entities: 'bg-blue-100 text-blue-800',
+    detect_visual_logos: 'bg-purple-100 text-purple-800',
+    transcribe_and_flag_dialogue: 'bg-indigo-100 text-indigo-800',
+    score_risk: 'bg-amber-100 text-amber-900',
+    request_closer_look: 'bg-pink-100 text-pink-800',
+    store_detection: 'bg-emerald-100 text-emerald-800',
+    query_prior_detections: 'bg-slate-100 text-slate-800',
+  };
+
   return (
-    // Keep a shared shell (sidebar, navbar) outside the boundary so it
-    // survives a page crash.
-    <RoutedErrorBoundary>
-      <Switch>
-        <Route path="/" component={Home} />
-        <Route path="/report/:projectId" component={ReportPage} />
-        <Route component={NotFound} />
-      </Switch>
-    </RoutedErrorBoundary>
+    <section className="rounded-xl border border-border bg-card shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-4 p-5 sm:px-6"
+        data-testid="button-toggle-reasoning"
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid size-8 place-items-center rounded-full bg-accent/20 text-accent-foreground">
+            <Wrench size={15} />
+          </span>
+          <div className="text-left">
+            <h2 className="text-sm font-bold tracking-tight text-foreground">Agent Autonomous Decision Log</h2>
+            <p className="text-xs text-muted-foreground">
+              {toolCalls.length} tool executions autonomously orchestrated by Google Gemini ADK
+            </p>
+          </div>
+        </div>
+        <ChevronDown size={15} className={`text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="border-t border-border px-5 py-4 sm:px-6 fade-up">
+          <div className="space-y-2">
+            {toolCalls.map((tc, i) => (
+              <div key={i} className="flex items-start gap-3 text-xs">
+                <span className="mt-0.5 font-mono text-[9px] text-muted-foreground/60 tabular-nums shrink-0">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span
+                  className={`inline-flex shrink-0 items-center rounded px-2 py-0.5 font-mono text-[9px] font-bold ${
+                    toolColors[tc.tool] ?? 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {tc.tool}
+                </span>
+                <span className="text-muted-foreground truncate">{tc.result_summary}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
-function RoutedErrorBoundary({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
-  return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
+// ─── Analytics Page ────────────────────────────────────────────────────────
+
+type AnalyticsData = {
+  topBrands: Array<{ name: string; category: string; detectionCount: number; avgConfidence: number }>;
+  riskDistribution: Array<{ riskLevel: string; count: number }>;
+  totalStats: { totalDetections: number; totalProjects: number; totalAssets: number };
+  categoryDistribution: Array<{ category: string; count: number }>;
+};
+
+function AnalyticsPage() {
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    fetch('/api/analytics')
+      .then((res) => res.json())
+      .then(setData)
+      .catch(() => setError('Failed to load analytics'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <LoadingScreen label="Loading ClickHouse intelligence…" />;
+  if (error || !data) return <ErrorScreen message={error || 'No analytics data available'} onRetry={() => window.location.reload()} />;
+
+  const riskColors: Record<string, string> = { high: '#ef4444', medium: '#f59e0b', low: '#10b981' };
+  const maxBrandCount = Math.max(...data.topBrands.map((b) => b.detectionCount), 1);
+
+  return (
+    <div className="min-h-[100dvh]">
+      <header className="px-5 py-7 sm:px-8 sm:py-9 lg:px-12 border-b border-border/80 bg-card/40">
+        <div className="mx-auto flex max-w-[1380px] flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <p className="retro-kicker text-accent">Cross-Production Intelligence</p>
+            <h1 className="mt-1 text-[clamp(1.8rem,3vw,2.5rem)] font-bold tracking-tight">
+              ClickHouse Analytics
+            </h1>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Real-time aggregation across all clearance projects powered by ClickHouse Cloud
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLocation('/')}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors self-start sm:self-auto"
+          >
+            <ArrowLeft size={14} />
+            <span>Back to Workspace</span>
+          </button>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-[1380px] px-5 py-8 sm:px-8 lg:px-12 space-y-6">
+        {/* Stats row */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[
+            { label: 'Total Rights Flags', value: data.totalStats.totalDetections },
+            { label: 'Productions Scanned', value: data.totalStats.totalProjects },
+            { label: 'Assets Inspected', value: data.totalStats.totalAssets },
+          ].map((stat) => (
+            <div key={stat.label} className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground font-bold">
+                {stat.label}
+              </p>
+              <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{stat.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Risk Distribution */}
+          <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <h2 className="text-base font-bold tracking-tight">Risk Level Distribution</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Overall ratio of high, medium, and low risks across projects</p>
+            <div className="mt-6 space-y-3">
+              {data.riskDistribution.length === 0 ? (
+                <p className="py-8 text-center text-xs text-muted-foreground">No detections yet.</p>
+              ) : (
+                data.riskDistribution.map((item) => {
+                  const total = data.riskDistribution.reduce((s, r) => s + r.count, 0);
+                  const pct = total > 0 ? (item.count / total) * 100 : 0;
+                  return (
+                    <div key={item.riskLevel}>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold uppercase">{item.riskLevel}</span>
+                        <span className="font-mono text-muted-foreground">
+                          {item.count} ({pct.toFixed(0)}%)
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%`, backgroundColor: riskColors[item.riskLevel] ?? '#6b7280' }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+
+          {/* Category Distribution */}
+          <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <h2 className="text-base font-bold tracking-tight">Detection Categories</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Classification of detected third-party IP</p>
+            <div className="mt-6 space-y-2.5">
+              {data.categoryDistribution.length === 0 ? (
+                <p className="py-8 text-center text-xs text-muted-foreground">No categories yet.</p>
+              ) : (
+                data.categoryDistribution.map((item) => {
+                  const total = data.categoryDistribution.reduce((s, c) => s + c.count, 0);
+                  const pct = total > 0 ? (item.count / total) * 100 : 0;
+                  return (
+                    <div key={item.category} className="flex items-center justify-between rounded-md bg-muted/40 px-3.5 py-2.5 text-xs">
+                      <span className="font-medium text-foreground">{categoryLabel(item.category)}</span>
+                      <span className="font-mono text-muted-foreground font-semibold">
+                        {item.count} ({pct.toFixed(0)}%)
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+        </div>
+
+        {/* Top Brands */}
+        <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="text-base font-bold tracking-tight">Top 10 Flagged Brands & References</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Entities appearing most frequently across all production sets
+          </p>
+          <div className="mt-6 space-y-3">
+            {data.topBrands.length === 0 ? (
+              <p className="py-8 text-center text-xs text-muted-foreground">No brands flagged yet.</p>
+            ) : (
+              data.topBrands.map((brand, i) => (
+                <div key={`${brand.name}-${i}`} className="flex items-center gap-3 text-xs">
+                  <span className="w-5 font-mono text-muted-foreground font-bold">{i + 1}.</span>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-foreground">{brand.name}</span>
+                        <span className="font-mono text-[9px] uppercase text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {categoryLabel(brand.category)}
+                        </span>
+                      </div>
+                      <span className="font-mono text-muted-foreground font-semibold">
+                        {brand.detectionCount}×
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-accent transition-all duration-500"
+                        style={{ width: `${(brand.detectionCount / maxBrandCount) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+// ─── Utility Screens ───────────────────────────────────────────────────────
+
+function LoadingScreen({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-[45vh] items-center justify-center">
+      <div className="text-center">
+        <LoaderCircle size={24} className="mx-auto animate-spin text-accent" />
+        <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground" data-testid="status-loading">
+          {label}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ErrorScreen({
+  message,
+  onRetry,
+  backHref,
+}: {
+  message: string;
+  onRetry: () => void;
+  backHref?: string;
+}) {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center px-5">
+      <div className="max-w-md text-center rounded-xl border border-border bg-card p-8 shadow-sm">
+        <div className="mx-auto grid size-12 place-items-center rounded-full bg-red-100 text-red-800 mb-3">
+          <AlertTriangle size={22} />
+        </div>
+        <h2 className="text-lg font-bold text-foreground">Something interrupted the workspace.</h2>
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground" data-testid="status-error">
+          {message}
+        </p>
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
+            data-testid="button-retry"
+          >
+            <RefreshCcw size={13} />
+            <span>Try Again</span>
+          </button>
+          {backHref && (
+            <Link href={backHref} className="rounded-md border border-border px-4 py-2 text-xs font-medium text-foreground hover:bg-muted" data-testid="link-error-back">
+              Back
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Root App & Router ─────────────────────────────────────────────────────
+
+function AppShellWithState() {
+  const { user } = useAuth();
+  const projectsQuery = useListProjects({
+    query: {
+      queryKey: getListProjectsQueryKey(),
+    },
+  });
+
+  const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
+  const [selectedId, setSelectedId] = useState<string>();
+
+  useEffect(() => {
+    if (!selectedId && projects[0]) {
+      setSelectedId(projects[0].id);
+    }
+    if (selectedId && projects.length > 0 && !projects.some((p) => p.id === selectedId)) {
+      setSelectedId(projects[0].id);
+    }
+  }, [projects, selectedId]);
+
+  return (
+    <Shell
+      projects={projects}
+      selectedId={selectedId}
+      onSelectProject={(id) => setSelectedId(id)}
+    >
+      <Switch>
+        <Route path="/">
+          <Home
+            projects={projects}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
+          />
+        </Route>
+        <Route path="/report/:projectId" component={ReportPage} />
+        <Route path="/analytics" component={AnalyticsPage} />
+        <Route component={NotFound} />
+      </Switch>
+    </Shell>
+  );
 }
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Shell><Router /></Shell></WouterRouter>
-        <Toaster />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+            <ErrorBoundary>
+              <AppShellWithState />
+            </ErrorBoundary>
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

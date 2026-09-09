@@ -10,10 +10,16 @@
   "include": ["src"],
   "references": [
     {
-      "path": "../../lib/db"
+      "path": "../../lib/api-zod"
     },
     {
-      "path": "../../lib/api-zod"
+      "path": "../../lib/clickhouse-mcp"
+    },
+    {
+      "path": "../../lib/cloudinary"
+    },
+    {
+      "path": "../../lib/agent"
     }
   ]
 }

@@ -121,10 +121,19 @@
     letter-spacing: .1em;
     line-height: 1.2;
   }
+  .cinema-title {
+    font-family: 'Bodoni Moda', Georgia, serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
   .status-dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; }
   .scan-grid { background: hsl(var(--muted) / .42); }
   .fade-up { animation: fade-up .35s ease-out both; }
   .pulse-bar { animation: pulse-bar 1.5s ease-in-out infinite; }
+  .film-strip {
+    background-image: radial-gradient(circle, currentColor 1.5px, transparent 1.5px);
+    background-size: 14px 14px;
+  }
 }
 
 @keyframes fade-up {
@@ -135,4 +144,32 @@
 @keyframes pulse-bar {
   0%, 100% { opacity: .35; transform: scaleX(.92); }
   50% { opacity: 1; transform: scaleX(1); }
+}
+
+/* ─── Print & PDF Export Styles ────────────────────────────────────────── */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-size: 12pt;
+  }
+  aside, nav, button, [data-testid="link-brand"], [data-testid="button-back-workspace"], .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .min-h-\[100dvh\] {
+    min-height: auto !important;
+  }
+  .md\:grid {
+    display: block !important;
+  }
+  .bg-card, .bg-muted {
+    background: transparent !important;
+    border: 1px solid #e5e7eb !important;
+  }
+  .page-break {
+    page-break-before: always;
+  }
 }
