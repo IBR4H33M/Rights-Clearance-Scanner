@@ -1533,15 +1533,28 @@ function ReportPage() {
       <header className="px-5 py-7 sm:px-8 sm:py-9 lg:px-12 border-b border-border/80 bg-card/40">
         <div className="mx-auto flex max-w-[1380px] flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
-            <p className="retro-kicker text-accent">RightScan Clearance Audit</p>
-            <h1 className="mt-1 text-[clamp(1.8rem,3vw,2.5rem)] font-bold tracking-tight">
-              {project?.title ?? 'Production Clearance Report'}
+            <h1 className="text-[clamp(2.2rem,4.5vw,3.4rem)] font-extrabold tracking-tight text-foreground leading-tight">
+              RightScan
             </h1>
+            <h2 className="mt-1.5 text-lg sm:text-xl font-medium text-muted-foreground">
+              {project?.title ?? 'Production Clearance Report'}
+            </h2>
             {reportQuery.data && (
-              <p className="mt-1 text-xs text-muted-foreground font-mono">
+              <p className="mt-1.5 text-xs text-muted-foreground font-mono">
                 Generated {formatDate(reportQuery.data.generatedAt)} · {reportQuery.data.analyzedAssets} source assets reviewed
               </p>
             )}
+            <div className="mt-3.5">
+              <button
+                type="button"
+                onClick={() => setLocation('/')}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
+                data-testid="button-back-workspace"
+              >
+                <ArrowLeft size={14} />
+                <span>Back to Workspace</span>
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -1567,15 +1580,6 @@ function ReportPage() {
                 </button>
               </>
             )}
-            <button
-              type="button"
-              onClick={() => setLocation('/')}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              data-testid="button-back-workspace"
-            >
-              <ArrowLeft size={14} />
-              <span>Back to Workspace</span>
-            </button>
           </div>
         </div>
       </header>
