@@ -9,8 +9,9 @@ COPY artifacts/ artifacts/
 COPY scripts/ scripts/
 COPY tsconfig.base.json tsconfig.json ./
 
-RUN pnpm approve-builds --all || true
-RUN pnpm install --frozen-lockfile
+RUN pnpm config set enable-pre-post-scripts true && \
+    pnpm config set unsafe-perm true && \
+    pnpm install --frozen-lockfile
 RUN pnpm run build
 
 FROM node:24-slim AS runtime
