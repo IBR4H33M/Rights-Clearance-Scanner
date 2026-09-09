@@ -1748,12 +1748,9 @@ function ReportPage() {
       <header className="px-5 py-7 sm:px-8 sm:py-9 lg:px-12 border-b border-border/80 bg-card/40">
         <div className="mx-auto flex max-w-[1380px] flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
-            <h1 className="text-[clamp(2.2rem,4.5vw,3.4rem)] font-extrabold tracking-tight text-foreground leading-tight">
-              RightScan
-            </h1>
-            <h2 className="mt-1.5 text-lg sm:text-xl font-medium text-muted-foreground">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
               {project?.title ?? 'Production Clearance Report'}
-            </h2>
+            </h1>
             {reportQuery.data && (
               <p className="mt-1.5 text-xs text-muted-foreground font-mono">
                 Generated {formatDate(reportQuery.data.generatedAt)} · {reportQuery.data.analyzedAssets} source assets reviewed
