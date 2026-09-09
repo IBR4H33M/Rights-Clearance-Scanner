@@ -34,13 +34,25 @@ app.use(express.urlencoded({ limit: "600mb", extended: true }));
 app.use("/api", router);
 
 // Serve compiled frontend in production if dist/public or ./public exists
-const publicDir = path.resolve(import.meta.dirname, "public");
-if (fs.existsSync(publicDir)) {
+const candidateDirs = [
+  path.resolve(import.meta.dirname, "public"),
+  path.resolve(import.meta.dirname, "../../rights-clearance-scanner/dist/public"),
+  path.resolve(import.meta.dirname, "../rights-clearance-scanner/dist/public"),
+  path.resolve(process.cwd(), "artifacts/rights-clearance-scanner/dist/public"),
+  path.resolve(process.cwd(), "dist/public"),
+  path.resolve(process.cwd(), "public"),
+];
+
+const publicDir = candidateDirs.find((dir) => fs.existsSync(dir) && fs.existsSync(path.join(dir, "index.html")));
+if (publicDir) {
+  logger.info({ publicDir }, "Serving static frontend from publicDir");
   app.use(express.static(publicDir));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api")) return next();
     res.sendFile(path.join(publicDir, "index.html"));
   });
+} else {
+  logger.warn({ candidateDirs }, "No static frontend directory with index.html found");
 }
 
 export default app;
