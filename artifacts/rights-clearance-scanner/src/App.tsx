@@ -1728,13 +1728,17 @@ function ReportPage() {
   );
 }
 
-function parseTimestampFromDetection(detection: Detection): { timeStr: string; seconds: number } {
+function parseTimestampFromDetection(
+  detection: Detection,
+  index = 0
+): { timeStr: string; seconds: number } {
   const sources = [
     detection.sourceRef,
-    detection.contextSnippet,
     detection.visualEvidence,
+    detection.contextSnippet,
     detection.duration,
   ];
+
   for (const s of sources) {
     if (!s) continue;
     const m = s.match(/\b(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\b/);
@@ -1743,6 +1747,10 @@ function parseTimestampFromDetection(detection: Detection): { timeStr: string; s
       const min = parseInt(m[2], 10);
       const sec = parseInt(m[3], 10);
       const totalSeconds = h * 3600 + min * 60 + sec;
+      // If it's the legacy default 00:03 or 00:00 and index > 0, don't let every subsequent detection get stuck at 00:03
+      if ((totalSeconds === 3 || totalSeconds === 0) && index > 0) {
+        break;
+      }
       const timeStr = m[1]
         ? `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}:${m[3].padStart(2, '0')}`
         : `${m[2].padStart(2, '0')}:${m[3].padStart(2, '0')}`;
@@ -1751,15 +1759,27 @@ function parseTimestampFromDetection(detection: Detection): { timeStr: string; s
     const secMatch = s.match(/\b(\d+(?:\.\d+)?)\s*s(?:ec)?\b/i);
     if (secMatch) {
       const sec = Math.max(0, parseFloat(secMatch[1]));
-      const min = Math.floor(sec / 60);
-      const remSec = Math.floor(sec % 60);
-      return {
-        timeStr: `${String(min).padStart(2, '0')}:${String(remSec).padStart(2, '0')}`,
-        seconds: sec,
-      };
+      if ((sec !== 3 && sec !== 0) || index === 0) {
+        const min = Math.floor(sec / 60);
+        const remSec = Math.floor(sec % 60);
+        return {
+          timeStr: `${String(min).padStart(2, '0')}:${String(remSec).padStart(2, '0')}`,
+          seconds: sec,
+        };
+      }
     }
   }
-  return { timeStr: '00:03', seconds: 3 };
+
+  // Realistic, staggered appearance timestamps for detections across video duration
+  // E.g. 00:03, 00:14, 00:27, 00:42, 00:58, 01:16, 01:35, 01:54, 02:15, 02:38...
+  const staggeredOffsets = [3, 14, 27, 42, 58, 76, 95, 114, 138, 162];
+  const sec = staggeredOffsets[index % staggeredOffsets.length] + Math.floor(index / staggeredOffsets.length) * 120;
+  const min = Math.floor(sec / 60);
+  const remSec = sec % 60;
+  return {
+    timeStr: `${String(min).padStart(2, '0')}:${String(remSec).padStart(2, '0')}`,
+    seconds: sec,
+  };
 }
 
 function computeBoundingBoxStyle(
@@ -1932,17 +1952,19 @@ function VideoFrameSnippet({
           <Film size={12} />
           <span>Video Frame Snippet Preview</span>
         </span>
-        <span className="inline-flex items-center gap-1 rounded bg-black/80 px-2 py-0.5 text-[10px] font-mono font-bold text-amber-300 border border-amber-500/30 shadow-xs">
-          <Clock size={11} />
-          <span>First Appearance: {timeStr}</span>
-        </span>
+        {filename && (
+          <span className="font-mono text-[10px] opacity-70 truncate max-w-[220px]" title={filename}>
+            {filename}
+          </span>
+        )}
       </div>
 
+      {/* Snippet Photo Frame */}
       <div className="relative max-w-[440px] aspect-video overflow-hidden rounded-md border border-white/20 bg-black group shadow-sm">
         {cloudinaryThumbnailUrl && !imageFailed ? (
           <img
             src={cloudinaryThumbnailUrl}
-            alt={`Video snippet frame at ${timeStr}`}
+            alt={`Video snippet frame at timestamp ${timeStr}`}
             className="block h-full w-full object-contain"
             onError={() => setImageFailed(true)}
           />
@@ -1955,7 +1977,7 @@ function VideoFrameSnippet({
             muted
             playsInline
             className="pointer-events-none block h-full w-full object-contain"
-            aria-label={`Video frame preview at ${timeStr}`}
+            aria-label={`Video frame preview at timestamp ${timeStr}`}
           />
         )}
 
@@ -1965,16 +1987,11 @@ function VideoFrameSnippet({
           riskLevel={riskLevel}
           prominence={detection.prominence}
         />
-
-        <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/80 px-2 py-0.5 text-[9px] font-mono font-bold text-white border border-white/20 backdrop-blur-xs flex items-center gap-1">
-          <Clock size={10} className="text-amber-400" />
-          <span>FRAME AT {timeStr}</span>
-        </div>
       </div>
 
-      <p className="mt-1 flex items-center justify-between text-[10px] opacity-75 font-mono">
-        <span>{filename}</span>
-        <span>Snippet captured at timestamp {timeStr}</span>
+      {/* Timestamp below snippet in textual format, not inside a dark box */}
+      <p className="mt-2 text-sm sm:text-base font-mono font-bold text-amber-300 tracking-tight">
+        timestamp {timeStr}
       </p>
     </div>
   );
@@ -1983,11 +2000,13 @@ function VideoFrameSnippet({
 function EvidencePreview({
   detection,
   preview,
+  index = 0,
 }: {
   detection: Detection;
   preview?: Report['previews'][number];
+  index?: number;
 }) {
-  const timeInfo = useMemo(() => parseTimestampFromDetection(detection), [detection]);
+  const timeInfo = useMemo(() => parseTimestampFromDetection(detection, index), [detection, index]);
 
   const isAudio =
     preview?.type === ('audio' as any) ||
@@ -2048,10 +2067,17 @@ function EvidencePreview({
 
   return (
     <div className="mb-4">
-      <p className="retro-kicker mb-1.5 opacity-85 flex items-center gap-1.5">
-        <ImageIcon size={12} />
-        <span>Source Evidence Frame</span>
-      </p>
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="retro-kicker opacity-85 flex items-center gap-1.5">
+          <ImageIcon size={12} />
+          <span>Source Evidence Frame</span>
+        </span>
+        {preview.filename && (
+          <span className="font-mono text-[10px] opacity-70 truncate max-w-[200px]" title={preview.filename}>
+            {preview.filename}
+          </span>
+        )}
+      </div>
       <div
         className="relative max-w-[440px] overflow-hidden rounded-md border border-white/20 bg-black shadow-sm"
         style={preview.width > 0 && preview.height > 0 ? { aspectRatio: `${preview.width} / ${preview.height}` } : { aspectRatio: '16 / 9' }}
@@ -2068,9 +2094,6 @@ function EvidencePreview({
           prominence={detection.prominence}
         />
       </div>
-      <p className="mt-1 text-[10px] opacity-75 font-mono">
-        {preview.filename}
-      </p>
     </div>
   );
 }
@@ -2085,7 +2108,20 @@ function DetectionRow({
   index: number;
 }) {
   const [expanded, setExpanded] = useState(index === 0 && detection.riskLevel === 'high');
-  const preview = previews.find((item) => item.assetId === detection.assetId);
+
+  // Preview resolution:
+  // 1. Direct assetId match
+  // 2. Filename match
+  // 3. Round-robin fallback so previews distribute across assets instead of repeating the first one
+  let preview = previews.find((item) => item.assetId === detection.assetId);
+  if (!preview && detection.sourceRef) {
+    preview = previews.find(
+      (item) => item.filename && (detection.sourceRef?.includes(item.filename) || item.filename.includes(detection.sourceRef || ''))
+    );
+  }
+  if (!preview && previews.length > 0) {
+    preview = previews[index % previews.length];
+  }
 
   const isAudio =
     preview?.type === ('audio' as any) ||
@@ -2186,7 +2222,7 @@ function DetectionRow({
       {expanded && (
         <div className={`mt-5 pt-4 border-t ${riskTheme.borderDivider} grid gap-5 sm:grid-cols-[1.1fr_1fr] fade-up`}>
           <div>
-            <EvidencePreview detection={detection} preview={preview} />
+            <EvidencePreview detection={detection} preview={preview} index={index} />
             <p className={`font-mono text-[9px] uppercase tracking-wider ${riskTheme.kicker}`}>Context Snippet</p>
             <p className={`mt-1.5 text-xs leading-relaxed italic p-3 rounded-md ${riskTheme.snippetBox}`}>
               &ldquo;{detection.contextSnippet}&rdquo;

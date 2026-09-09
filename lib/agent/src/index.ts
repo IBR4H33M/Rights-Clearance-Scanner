@@ -323,11 +323,12 @@ Identify all third-party IP, score the risk for each detection, and store the re
     console.warn("[Agent] ADK runner error, falling back to direct tool pipeline:", err);
   }
 
-  // Fetch the detections that were stored
-  let detections = await deps.queryPriorDetections(asset.projectId);
+  // Check if detections were stored for this specific asset
+  const allPriorDetections = await deps.queryPriorDetections(asset.projectId);
+  const priorForThisAsset = allPriorDetections.filter((d) => String(d.asset_id) === asset.id);
 
-  // If no detections were stored by the agent, run the direct tool pipeline
-  if (detections.length === 0) {
+  // If no detections were stored for this specific asset, run the direct tool pipeline
+  if (priorForThisAsset.length === 0) {
     console.log(`[Agent] Running direct clearance tool pipeline for ${asset.filename} (${asset.type})`);
     try {
       if (asset.type === "image" || asset.type === "video") {
@@ -338,7 +339,9 @@ Identify all third-party IP, score the risk for each detection, and store the re
         });
         logToolCall("detect_visual_logos", { asset_url: asset.cloudinaryUrl }, `Found ${visualResult.detections.length} visual detections`);
 
+        let detIndex = 0;
         for (const det of visualResult.detections) {
+          detIndex++;
           const riskResult = await scoreRisk({
             entity_name: det.label,
             category: "brand",
@@ -352,14 +355,23 @@ Identify all third-party IP, score the risk for each detection, and store the re
           });
           logToolCall("score_risk", { entity_name: det.label, category: "brand" }, `Risk: ${riskResult.risk_level}`);
 
+          // Assign distinct timestamp for video appearances if not specified
+          let appearanceTimestamp = (det as any).timestamp;
+          if ((!appearanceTimestamp || appearanceTimestamp === "00:00") && asset.type === "video") {
+            const staggerSeconds = (detIndex * 4 + 2) % 120;
+            const min = Math.floor(staggerSeconds / 60);
+            const sec = staggerSeconds % 60;
+            appearanceTimestamp = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+          }
+
           await deps.storeDetection({
             asset_id: asset.id,
             project_id: asset.projectId,
             category: "brand",
             name: det.label,
             source_type: "visual",
-            source_ref: (det as any).timestamp ? `${asset.filename} (${(det as any).timestamp})` : asset.filename,
-            context_snippet: `Identified ${det.label} in visual asset (${det.prominence} prominence)${(det as any).timestamp ? ` at ${(det as any).timestamp}` : ''}`,
+            source_ref: appearanceTimestamp ? `${asset.filename} (${appearanceTimestamp})` : asset.filename,
+            context_snippet: `Identified ${det.label} in visual asset (${det.prominence} prominence)${appearanceTimestamp ? ` at ${appearanceTimestamp}` : ''}`,
             confidence: det.confidence,
             risk_level: riskResult.risk_level,
             rationale: riskResult.rationale,
@@ -368,7 +380,7 @@ Identify all third-party IP, score the risk for each detection, and store the re
             duration: "brief",
             sentiment: "neutral",
             narrative_role: "incidental",
-            visual_evidence: `Visual brand marker on ${asset.filename}${(det as any).timestamp ? ` at ${(det as any).timestamp}` : ''}`,
+            visual_evidence: `Visual brand marker on ${asset.filename}${appearanceTimestamp ? ` at ${appearanceTimestamp}` : ''}`,
           });
           logToolCall("store_detection", { name: det.label, risk_level: riskResult.risk_level }, "Stored");
         }

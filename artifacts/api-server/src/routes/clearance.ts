@@ -381,14 +381,16 @@ router.post(
       );
 
       const allToolCalls: ToolCallLog[] = [];
-      const storedNames = new Set<string>();
+      const storedKeys = new Set<string>();
 
       // Create the dependency functions for the agent
       const deps = {
         storeDetection: async (detection: Record<string, unknown>) => {
           const name = String(detection.name ?? "").trim();
-          if (!name || storedNames.has(name.toLowerCase())) return;
-          storedNames.add(name.toLowerCase());
+          const assetId = String(detection.asset_id ?? "");
+          const key = `${assetId}:${name.toLowerCase()}`;
+          if (!name || storedKeys.has(key)) return;
+          storedKeys.add(key);
           const detId = randomUUID();
           const now = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
           await executeClickHouse(
