@@ -1482,7 +1482,7 @@ function Home({
                     )}
                     <span className="mt-3 text-sm font-semibold">
                       {uploadAsset.isPending
-                        ? 'Ingesting material into Cloudinary…'
+                        ? 'Uploading asset…'
                         : isDragging
                         ? 'Release to upload files now'
                         : 'Drop files here or browse media'}
