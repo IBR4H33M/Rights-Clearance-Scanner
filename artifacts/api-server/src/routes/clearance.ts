@@ -31,6 +31,34 @@ function escapeStr(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+function parseBoundingBox(raw: unknown) {
+  if (!raw) return null;
+  try {
+    const bb = String(raw).trim();
+    if (bb && (bb.startsWith("{") || bb.startsWith("["))) {
+      const parsed = JSON.parse(bb);
+      if (Array.isArray(parsed) && parsed.length === 4) {
+        return {
+          top: Number(parsed[0]),
+          left: Number(parsed[1]),
+          bottom: Number(parsed[2]),
+          right: Number(parsed[3]),
+        };
+      } else if (parsed && typeof parsed === "object") {
+        return {
+          left: Number((parsed as any).left ?? (parsed as any).xmin ?? 0),
+          top: Number((parsed as any).top ?? (parsed as any).ymin ?? 0),
+          right: Number((parsed as any).right ?? (parsed as any).xmax ?? 1000),
+          bottom: Number((parsed as any).bottom ?? (parsed as any).ymax ?? 1000),
+        };
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 function getUserIdFromReq(req: any): string {
   const authHeader = req.headers.authorization;
   if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
@@ -423,22 +451,20 @@ router.post(
         `SELECT * FROM detections WHERE project_id = '${escapeStr(projectId)}' ORDER BY detected_at`
       );
 
+
       const counts = { low: 0, medium: 0, high: 0 };
       const detections = allDetections.map((d) => {
         const riskLevel = String(d.risk_level ?? "medium");
         if (riskLevel in counts) counts[riskLevel as keyof typeof counts]++;
 
-        let boundingBox = null;
-        try {
-          const bb = String(d.bounding_box ?? "");
-          if (bb && bb.startsWith("{")) boundingBox = JSON.parse(bb);
-        } catch { /* ignore */ }
+        const boundingBox = parseBoundingBox(d.bounding_box);
 
         return {
           id: String(d.id),
           assetId: String(d.asset_id),
           category: String(d.category ?? "brand"),
           name: String(d.name ?? ""),
+          sourceType: String(d.source_type ?? ""),
           sourceRef: String(d.source_ref ?? ""),
           contextSnippet: String(d.context_snippet ?? ""),
           confidence: Number(d.confidence ?? 0.5),
@@ -456,7 +482,7 @@ router.post(
 
       // Build previews from assets
       const previews = assetRows
-        .filter((a) => String(a.type) === "image" || String(a.type) === "video")
+        .filter((a) => String(a.type) === "image" || String(a.type) === "video" || String(a.type) === "audio")
         .map((a) => ({
           assetId: String(a.id),
           filename: String(a.filename),
@@ -590,7 +616,7 @@ router.get("/projects/:projectId/reports/:reportId", async (req, res): Promise<v
     );
 
     const previews = assetRows
-      .filter((a) => String(a.type) === "image" || String(a.type) === "video")
+      .filter((a) => String(a.type) === "image" || String(a.type) === "video" || String(a.type) === "audio")
       .map((a) => ({
         assetId: String(a.id),
         filename: String(a.filename),
@@ -709,7 +735,7 @@ router.get("/projects/:projectId/report", async (req, res): Promise<void> => {
     );
 
     const previews = assetRows
-      .filter((a) => String(a.type) === "image" || String(a.type) === "video")
+      .filter((a) => String(a.type) === "image" || String(a.type) === "video" || String(a.type) === "audio")
       .map((a) => ({
         assetId: String(a.id),
         filename: String(a.filename),
@@ -765,17 +791,14 @@ router.get("/projects/:projectId/report", async (req, res): Promise<void> => {
       const riskLevel = String(d.risk_level ?? "medium");
       if (riskLevel in counts) counts[riskLevel as keyof typeof counts]++;
 
-      let boundingBox = null;
-      try {
-        const bb = String(d.bounding_box ?? "");
-        if (bb && bb.startsWith("{")) boundingBox = JSON.parse(bb);
-      } catch { /* ignore */ }
+      const boundingBox = parseBoundingBox(d.bounding_box);
 
       return {
         id: String(d.id),
         assetId: String(d.asset_id),
         category: String(d.category ?? "brand"),
         name: String(d.name ?? ""),
+        sourceType: String(d.source_type ?? ""),
         sourceRef: String(d.source_ref ?? ""),
         contextSnippet: String(d.context_snippet ?? ""),
         confidence: Number(d.confidence ?? 0.5),

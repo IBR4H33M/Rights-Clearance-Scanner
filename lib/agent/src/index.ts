@@ -282,6 +282,8 @@ export async function analyzeAsset(
       ? `This is a SCRIPT file (${asset.filename}). It is a text document — use extract_script_entities to analyze its contents. The script text will need to be fetched from: ${asset.cloudinaryUrl}`
       : asset.type === "video"
       ? `This is a VIDEO file (${asset.filename}, ${asset.mimeType}). Use detect_visual_logos to find visual brands/logos AND transcribe_and_flag_dialogue to check spoken dialogue. The video URL is: ${asset.cloudinaryUrl}`
+      : asset.type === "audio"
+      ? `This is an AUDIO file (${asset.filename}, ${asset.mimeType}). Use transcribe_and_flag_dialogue to check spoken dialogue, lyrics, brand names, and song references. The audio URL is: ${asset.cloudinaryUrl}`
       : `This is an IMAGE file (${asset.filename}, ${asset.mimeType}). Use detect_visual_logos to find visual brands/logos. The image URL is: ${asset.cloudinaryUrl}`;
 
   const userMessage = `Analyze this asset for rights-clearance risks.
@@ -356,8 +358,8 @@ Identify all third-party IP, score the risk for each detection, and store the re
             category: "brand",
             name: det.label,
             source_type: "visual",
-            source_ref: asset.filename,
-            context_snippet: `Identified ${det.label} in visual asset (${det.prominence} prominence)`,
+            source_ref: (det as any).timestamp ? `${asset.filename} (${(det as any).timestamp})` : asset.filename,
+            context_snippet: `Identified ${det.label} in visual asset (${det.prominence} prominence)${(det as any).timestamp ? ` at ${(det as any).timestamp}` : ''}`,
             confidence: det.confidence,
             risk_level: riskResult.risk_level,
             rationale: riskResult.rationale,
@@ -366,9 +368,47 @@ Identify all third-party IP, score the risk for each detection, and store the re
             duration: "brief",
             sentiment: "neutral",
             narrative_role: "incidental",
-            visual_evidence: `Visual brand marker on ${asset.filename}`,
+            visual_evidence: `Visual brand marker on ${asset.filename}${(det as any).timestamp ? ` at ${(det as any).timestamp}` : ''}`,
           });
           logToolCall("store_detection", { name: det.label, risk_level: riskResult.risk_level }, "Stored");
+        }
+      } else if (asset.type === "audio") {
+        const { base64, mimeType } = await deps.fetchAssetBase64(asset.cloudinaryUrl);
+        const audioResult = await transcribeAndFlagDialogue({
+          video_base64: base64,
+          mime_type: mimeType,
+        });
+        logToolCall("transcribe_and_flag_dialogue", { asset_url: asset.cloudinaryUrl }, `Found ${audioResult.mentions.length} dialogue mentions`);
+
+        for (const mention of audioResult.mentions) {
+          const riskResult = await scoreRisk({
+            entity_name: mention.name,
+            category: mention.category,
+            context: mention.context_snippet,
+            prominence: "moderate",
+            source_type: "audio",
+          });
+          logToolCall("score_risk", { entity_name: mention.name, category: mention.category }, `Risk: ${riskResult.risk_level}`);
+
+          await deps.storeDetection({
+            asset_id: asset.id,
+            project_id: asset.projectId,
+            category: mention.category,
+            name: mention.name,
+            source_type: "audio",
+            source_ref: mention.timestamp ? `${asset.filename} (${mention.timestamp})` : asset.filename,
+            context_snippet: mention.context_snippet,
+            confidence: mention.confidence,
+            risk_level: riskResult.risk_level,
+            rationale: riskResult.rationale,
+            bounding_box: "",
+            prominence: "moderate",
+            duration: "brief",
+            sentiment: mention.sentiment || "neutral",
+            narrative_role: "referenced_in_dialogue",
+            visual_evidence: `Audio dialogue reference at ${mention.timestamp || "audio track"}`,
+          });
+          logToolCall("store_detection", { name: mention.name, risk_level: riskResult.risk_level }, "Stored");
         }
       } else if (asset.type === "script") {
         const res = await fetch(asset.cloudinaryUrl);

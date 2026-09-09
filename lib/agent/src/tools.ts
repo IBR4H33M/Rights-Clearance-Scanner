@@ -98,7 +98,8 @@ Return a JSON array. Each object must have:
   "label": "brand or logo name",
   "confidence": 0.0-1.0,
   "box_2d": [ymin, xmin, ymax, xmax] or null,
-  "prominence": "background" | "moderate" | "featured"
+  "prominence": "background" | "moderate" | "featured",
+  "timestamp": "MM:SS timestamp of first appearance in video, or 00:00 for still images"
 }
 Coordinates should be integers 0-1000 on a normalized grid. Limit to 25 objects. For videos, report each distinct reference only at its first appearance.`,
           },
