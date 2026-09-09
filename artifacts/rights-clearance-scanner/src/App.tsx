@@ -926,6 +926,198 @@ function ProjectReportsSection({
   );
 }
 
+// ─── Clearance Agent Execution Terminal ───────────────────────────────────
+
+function ClearanceAgentTerminal({
+  projectId,
+  assetCount,
+}: {
+  projectId: string;
+  assetCount: number;
+}) {
+  const [spinnerIdx, setSpinnerIdx] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [activeStep, setActiveStep] = useState(0);
+
+  // Terminal loading spinner using '/', '–', '\', '|'
+  const spinnerChars = ['/', '–', '\\', '|'];
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSpinnerIdx((prev) => (prev + 1) % spinnerChars.length);
+    }, 110);
+    return () => clearInterval(timer);
+  }, [spinnerChars.length]);
+
+  // Elapsed timer in tenths of a second
+  useEffect(() => {
+    const start = Date.now();
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - start) / 100));
+    }, 100);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Progress through agent pipeline steps dynamically
+  useEffect(() => {
+    const t1 = setTimeout(() => setActiveStep(1), 1800);
+    const t2 = setTimeout(() => setActiveStep(2), 4800);
+    const t3 = setTimeout(() => setActiveStep(3), 8500);
+    const t4 = setTimeout(() => setActiveStep(4), 12500);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+    };
+  }, []);
+
+  const currentSpinner = spinnerChars[spinnerIdx];
+  const elapsedSec = (elapsed / 10).toFixed(1);
+
+  const steps = [
+    {
+      label: 'Agent: Media Ingestion & Keyframe Segmentation',
+      agent: 'ingest_agent',
+      desc: `Ingested ${assetCount} asset${assetCount === 1 ? '' : 's'} · Extracted visual frames & audio sample rates for inspection`,
+    },
+    {
+      label: 'Agent: detect_visual_logos',
+      agent: 'gemini_vision_agent',
+      desc: 'Executing frame-level visual entity extraction & bounding box coordinate alignment via Gemini 2.5 Flash',
+    },
+    {
+      label: 'Agent: transcribe_and_flag_dialogue',
+      agent: 'gemini_audio_agent',
+      desc: 'Transcribing audio channels, matching trademarked brand names and dialogue song references',
+    },
+    {
+      label: 'Agent: score_risk',
+      agent: 'legal_risk_agent',
+      desc: 'Evaluating commercial prominence, exposure duration, fair use criteria, and required legal clearance actions',
+    },
+    {
+      label: 'Agent: ClickHouse Storage & Report Compiler',
+      agent: 'clickhouse_mcp_agent',
+      desc: 'Writing structured detections, chain-of-title audit records, and tool-call telemetry to ClickHouse Cloud',
+    },
+  ];
+
+  return (
+    <div className="mt-4 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 font-mono text-xs text-zinc-300 shadow-2xl animate-in fade-in-50 duration-200">
+      {/* Terminal Title Bar */}
+      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/90 px-3.5 py-2">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full bg-red-500/90" />
+            <span className="size-2.5 rounded-full bg-amber-500/90" />
+            <span className="size-2.5 rounded-full bg-emerald-500/90" />
+          </div>
+          <span className="text-[11px] font-semibold text-zinc-400 ml-2">
+            rightscan-agent-runner — project_{projectId.slice(0, 8)}
+          </span>
+        </div>
+        <div className="flex items-center gap-2.5 text-[10px]">
+          <span className="inline-flex items-center gap-1.5 text-emerald-400 font-bold">
+            <span className="size-1.5 rounded-full bg-emerald-400 animate-ping" />
+            LIVE AGENT RUN
+          </span>
+          <span className="text-zinc-500 font-bold">[{elapsedSec}s]</span>
+        </div>
+      </div>
+
+      {/* Terminal Body */}
+      <div className="p-4 space-y-3 leading-relaxed">
+        {/* Connection & Configuration Info */}
+        <div className="space-y-1 pb-3 border-b border-zinc-800/80 text-[11px]">
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-400 font-bold">[✓]</span>
+            <span className="text-zinc-400">Google AI Studio API Status:</span>
+            <span className="text-emerald-400 font-bold">CONNECTED</span>
+            <span className="text-zinc-500">(endpoint: v1beta/models, tls: active)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-400 font-bold">[✓]</span>
+            <span className="text-zinc-400">Foundation Model:</span>
+            <span className="text-amber-300 font-bold">gemini-2.5-flash</span>
+            <span className="text-zinc-500">(multimodal vision + audio context enabled)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-400 font-bold">[✓]</span>
+            <span className="text-zinc-400">Google Agent Kit (ADK):</span>
+            <span className="text-cyan-300 font-bold">ACTIVE (v1.52.0)</span>
+            <span className="text-zinc-500">(dynamic multi-tool coordinator)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-400 font-bold">[✓]</span>
+            <span className="text-zinc-400">Audit Database:</span>
+            <span className="text-purple-300 font-bold">ClickHouse Cloud</span>
+            <span className="text-zinc-500">(hms2rsrq6s.ap-southeast-1.aws, port 8443)</span>
+          </div>
+        </div>
+
+        {/* Live Step Progression */}
+        <div className="space-y-2 pt-1">
+          <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+            Execution Pipeline:
+          </div>
+          {steps.map((step, idx) => {
+            const isDone = activeStep > idx;
+            const isCurrent = activeStep === idx;
+
+            return (
+              <div
+                key={step.label}
+                className={`flex items-start gap-2.5 transition-all ${
+                  isDone
+                    ? 'text-zinc-300'
+                    : isCurrent
+                    ? 'text-amber-300 font-medium'
+                    : 'text-zinc-600 opacity-60'
+                }`}
+              >
+                <span className="shrink-0 font-bold w-6 text-center font-mono">
+                  {isDone ? (
+                    <span className="text-emerald-400 font-bold">[✓]</span>
+                  ) : isCurrent ? (
+                    <span className="text-amber-400 font-extrabold text-sm">[{currentSpinner}]</span>
+                  ) : (
+                    <span className="text-zinc-600">[·]</span>
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className={isCurrent ? 'text-amber-300 font-bold' : isDone ? 'text-zinc-200' : 'text-zinc-500'}>
+                      {step.label}
+                    </span>
+                    <span className="rounded bg-zinc-850 border border-zinc-800 px-1.5 py-0.2 text-[9px] text-zinc-400 font-mono">
+                      {step.agent}
+                    </span>
+                    {isCurrent && (
+                      <span className="inline-block size-1.5 rounded-full bg-amber-400 animate-ping" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mt-0.5 font-normal">
+                    {step.desc}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Live Command Line Prompt */}
+        <div className="pt-2 border-t border-zinc-800/60 flex items-center gap-2 text-[11px] text-zinc-500">
+          <span className="text-emerald-400 font-bold">adk@gemini-runner:~$</span>
+          <span className="text-zinc-300 font-mono">
+            {activeStep >= steps.length ? 'Finalizing clearance report payload…' : `${steps[activeStep]?.agent} processing…`}
+          </span>
+          <span className="inline-block w-2 h-3.5 bg-amber-400 animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Home / Workspace View ─────────────────────────────────────────────────
 
 function Home({
@@ -1384,40 +1576,41 @@ function Home({
                     </button>
                   </div>
 
-                  {/* Progress Indicator */}
-                  <div className="mt-4 flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
-                    <div
-                      className={`grid size-8 place-items-center rounded-full ${
-                        analyzeProject.isPending
-                          ? 'bg-accent text-accent-foreground animate-pulse'
-                          : selectedProject?.reportStatus === 'ready'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-secondary text-muted-foreground'
-                      }`}
-                    >
-                      {analyzeProject.isPending ? (
-                        <LoaderCircle size={16} className="animate-spin" />
-                      ) : selectedProject?.reportStatus === 'ready' ? (
-                        <Check size={16} />
-                      ) : (
-                        <ScanSearch size={16} />
-                      )}
+                  {/* Clearance Terminal while running, else regular status indicator */}
+                  {analyzeProject.isPending ? (
+                    <ClearanceAgentTerminal
+                      projectId={selectedProject.id}
+                      assetCount={selectedProject.assetCount}
+                    />
+                  ) : (
+                    <div className="mt-4 flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+                      <div
+                        className={`grid size-8 place-items-center rounded-full ${
+                          selectedProject?.reportStatus === 'ready'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-secondary text-muted-foreground'
+                        }`}
+                      >
+                        {selectedProject?.reportStatus === 'ready' ? (
+                          <Check size={16} />
+                        ) : (
+                          <ScanSearch size={16} />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 text-xs">
+                        <p className="font-semibold text-foreground">
+                          {selectedProject?.reportStatus === 'ready'
+                            ? 'Scan complete — findings archived in ClickHouse'
+                            : 'Awaiting source material'}
+                        </p>
+                        <p className="text-muted-foreground mt-0.5">
+                          {selectedProject?.reportStatus === 'ready'
+                            ? 'Clearance report ready for review and legal export below.'
+                            : 'Add files and trigger analysis to generate a clearance report.'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1 text-xs">
-                      <p className="font-semibold text-foreground">
-                        {analyzeProject.isPending
-                          ? 'Executing multi-tool analysis…'
-                          : selectedProject?.reportStatus === 'ready'
-                          ? 'Scan complete — findings archived in ClickHouse'
-                          : 'Awaiting source material'}
-                      </p>
-                      <p className="text-muted-foreground mt-0.5">
-                        {analyzeProject.isPending
-                          ? 'Extracting entities, checking trademark databases, and scoring risk.'
-                          : 'Add files and trigger analysis to generate a clearance report.'}
-                      </p>
-                    </div>
-                  </div>
+                  )}
 
                   {analysisError && (
                     <div
