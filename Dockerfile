@@ -9,7 +9,7 @@ COPY artifacts/ artifacts/
 COPY scripts/ scripts/
 COPY tsconfig.base.json tsconfig.json ./
 
-RUN pnpm install --frozen-lockfile --ignore-scripts=false
+RUN pnpm install --frozen-lockfile
 RUN pnpm run build
 
 FROM node:24-slim AS runtime
