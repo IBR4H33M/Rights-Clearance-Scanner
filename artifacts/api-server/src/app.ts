@@ -47,9 +47,11 @@ const publicDir = candidateDirs.find((dir) => fs.existsSync(dir) && fs.existsSyn
 if (publicDir) {
   logger.info({ publicDir }, "Serving static frontend from publicDir");
   app.use(express.static(publicDir));
-  app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api")) return next();
-    res.sendFile(path.join(publicDir, "index.html"));
+  app.use((req, res, next) => {
+    if (req.method === "GET" && !req.path.startsWith("/api")) {
+      return res.sendFile(path.join(publicDir, "index.html"));
+    }
+    next();
   });
 } else {
   logger.warn({ candidateDirs }, "No static frontend directory with index.html found");
