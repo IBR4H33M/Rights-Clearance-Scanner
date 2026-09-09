@@ -325,6 +325,7 @@ Identify all third-party IP, score the risk for each detection, and store the re
 
   // Check if detections were stored for this specific asset
   const allPriorDetections = await deps.queryPriorDetections(asset.projectId);
+  let detections = allPriorDetections;
   const priorForThisAsset = allPriorDetections.filter((d) => String(d.asset_id) === asset.id);
 
   // If no detections were stored for this specific asset, run the direct tool pipeline

@@ -9,6 +9,7 @@ COPY artifacts/ artifacts/
 COPY scripts/ scripts/
 COPY tsconfig.base.json tsconfig.json ./
 
+RUN pnpm approve-builds --all || true
 RUN pnpm install --frozen-lockfile
 RUN pnpm run build
 

@@ -1,13 +1,11 @@
-# ============================================================================
-# SECURITY: Minimum release age for npm packages (supply-chain attack defense)
-# ============================================================================
-minimumReleaseAge: 1440
 
 packages:
   - artifacts/*
   - lib/*
   - lib/integrations/*
   - scripts
+
+autoInstallPeers: false
 
 catalog:
   '@tailwindcss/vite': ^4.1.14
@@ -28,13 +26,17 @@ catalog:
   vite: ^7.3.2
   wouter: ^3.3.5
   zod: ^3.25.76
-
-autoInstallPeers: false
+# ============================================================================
+# SECURITY: Minimum release age for npm packages (supply-chain attack defense)
+# ============================================================================
+minimumReleaseAge: 1440
 
 onlyBuiltDependencies:
+  - '@google/genai'
   - '@swc/core'
   - esbuild
   - msw
+  - protobufjs
   - unrs-resolver
 
 overrides:
