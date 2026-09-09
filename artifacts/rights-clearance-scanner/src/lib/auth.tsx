@@ -23,12 +23,31 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'rightscan_user_session';
+const TOKEN_KEY = 'rcs_token';
+
+// Immediately configure auth token getter synchronously at module initialization
+if (typeof window !== 'undefined') {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed?.id) {
+        setAuthTokenGetter(() => parsed.id);
+        localStorage.setItem(TOKEN_KEY, parsed.id);
+      }
+    }
+  } catch {}
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : null;
+      const parsed = saved ? JSON.parse(saved) : null;
+      if (parsed?.id) {
+        setAuthTokenGetter(() => parsed.id);
+      }
+      return parsed;
     } catch {
       return null;
     }
@@ -38,9 +57,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (user) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+      localStorage.setItem(TOKEN_KEY, user.id);
       setAuthTokenGetter(() => user.id);
     } else {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(TOKEN_KEY);
       setAuthTokenGetter(() => null);
     }
   }, [user]);
@@ -56,6 +77,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Login failed');
+      }
+      if (data.user?.id) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user));
+        localStorage.setItem(TOKEN_KEY, data.user.id);
+        setAuthTokenGetter(() => data.user.id);
       }
       setUser(data.user);
     } finally {
@@ -75,6 +101,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) {
         throw new Error(data.error || 'Registration failed');
       }
+      if (data.user?.id) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user));
+        localStorage.setItem(TOKEN_KEY, data.user.id);
+        setAuthTokenGetter(() => data.user.id);
+      }
       setUser(data.user);
     } finally {
       setLoading(false);
@@ -93,6 +124,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) {
         throw new Error(data.error || 'Failed to start demo');
       }
+      if (data.user?.id) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.user));
+        localStorage.setItem(TOKEN_KEY, data.user.id);
+        setAuthTokenGetter(() => data.user.id);
+      }
       setUser(data.user);
     } finally {
       setLoading(false);
@@ -100,8 +136,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    setUser(null);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    setAuthTokenGetter(() => null);
+    setUser(null);
   };
 
   return (

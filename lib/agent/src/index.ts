@@ -43,7 +43,10 @@ function logToolCall(
   });
 }
 
-export function createClearanceTools(deps: StoreDeps) {
+export function createClearanceTools(
+  deps: StoreDeps,
+  currentAsset?: { id: string; projectId: string; filename: string }
+) {
   const extractScriptTool = new FunctionTool({
     name: "extract_script_entities",
     description:
@@ -116,6 +119,29 @@ export function createClearanceTools(deps: StoreDeps) {
     execute: async (args) => {
       const result = await scoreRisk(args);
       logToolCall("score_risk", { entity_name: args.entity_name, category: args.category }, `Risk: ${result.risk_level}`);
+      if (currentAsset) {
+        try {
+          await deps.storeDetection({
+            asset_id: currentAsset.id,
+            project_id: currentAsset.projectId,
+            category: args.category,
+            name: args.entity_name,
+            source_type: args.source_type,
+            source_ref: currentAsset.filename,
+            context_snippet: args.context,
+            confidence: 0.9,
+            risk_level: result.risk_level,
+            rationale: result.rationale,
+            prominence: args.prominence,
+            duration: "brief",
+            sentiment: "neutral",
+            narrative_role: "incidental",
+            visual_evidence: `Brand marker detected in ${currentAsset.filename}`,
+          });
+        } catch (storeErr) {
+          console.warn("[Agent] Auto-store in score_risk caught:", storeErr);
+        }
+      }
       return result;
     },
   });
@@ -200,12 +226,15 @@ export function createClearanceTools(deps: StoreDeps) {
   ];
 }
 
-export function createClearanceAgent(deps: StoreDeps): LlmAgent {
-  const tools = createClearanceTools(deps);
+export function createClearanceAgent(
+  deps: StoreDeps,
+  currentAsset?: { id: string; projectId: string; filename: string }
+): LlmAgent {
+  const tools = createClearanceTools(deps, currentAsset);
 
   return new LlmAgent({
     name: "rights_clearance_agent",
-    model: "gemini-2.0-flash",
+    model: "gemini-3.5-flash-lite",
     description:
       "An AI agent that analyzes production assets for third-party rights-clearance risks.",
     instruction: `You are a rights-clearance analysis agent reviewing uploaded production assets. Your job is to identify all third-party brands, logos, celebrity references, song titles, and intellectual property references, assess the risk level of each, and store your findings.
@@ -240,7 +269,7 @@ export async function analyzeAsset(
   // Clear the log for this run
   toolCallLog.length = 0;
 
-  const agent = createClearanceAgent(deps);
+  const agent = createClearanceAgent(deps, asset);
   const runner = new InMemoryRunner({ agent, appName: "rights-clearance" });
 
   const session = await runner.sessionService.createSession({
@@ -268,29 +297,122 @@ ${assetDescription}
 
 Identify all third-party IP, score the risk for each detection, and store the results. If any detection has low confidence (below 0.6), use request_closer_look for re-examination.`;
 
-  const events = runner.runAsync({
-    userId: session.userId,
-    sessionId: session.id,
-    newMessage: {
-      role: "user",
-      parts: [{ text: userMessage }],
-    },
-  });
+  try {
+    const events = runner.runAsync({
+      userId: session.userId,
+      sessionId: session.id,
+      newMessage: {
+        role: "user",
+        parts: [{ text: userMessage }],
+      },
+    });
 
-  // Consume all events to drive the agent to completion
-  for await (const event of events) {
-    // Events are consumed — the agent handles tool calling internally
-    if (event.content?.parts) {
-      for (const part of event.content.parts) {
-        if ("text" in part && part.text) {
-          console.log(`[Agent] ${part.text.slice(0, 200)}`);
+    // Consume all events to drive the agent to completion
+    for await (const event of events) {
+      if (event.content?.parts) {
+        for (const part of event.content.parts) {
+          if ("text" in part && part.text) {
+            console.log(`[Agent] ${part.text.slice(0, 200)}`);
+          }
         }
       }
     }
+  } catch (err) {
+    console.warn("[Agent] ADK runner error, falling back to direct tool pipeline:", err);
   }
 
   // Fetch the detections that were stored
-  const detections = await deps.queryPriorDetections(asset.projectId);
+  let detections = await deps.queryPriorDetections(asset.projectId);
+
+  // If no detections were stored by the agent, run the direct tool pipeline
+  if (detections.length === 0) {
+    console.log(`[Agent] Running direct clearance tool pipeline for ${asset.filename} (${asset.type})`);
+    try {
+      if (asset.type === "image" || asset.type === "video") {
+        const { base64, mimeType } = await deps.fetchAssetBase64(asset.cloudinaryUrl);
+        const visualResult = await detectVisualLogos({
+          image_base64: base64,
+          mime_type: mimeType,
+        });
+        logToolCall("detect_visual_logos", { asset_url: asset.cloudinaryUrl }, `Found ${visualResult.detections.length} visual detections`);
+
+        for (const det of visualResult.detections) {
+          const riskResult = await scoreRisk({
+            entity_name: det.label,
+            category: "brand",
+            context: `Visual appearance in ${asset.filename} with ${det.prominence} prominence`,
+            prominence: String(det.prominence).toLowerCase().includes("high") || String(det.prominence).toLowerCase().includes("featured")
+              ? "featured"
+              : String(det.prominence).toLowerCase().includes("medium") || String(det.prominence).toLowerCase().includes("moderate")
+              ? "moderate"
+              : "background",
+            source_type: "visual",
+          });
+          logToolCall("score_risk", { entity_name: det.label, category: "brand" }, `Risk: ${riskResult.risk_level}`);
+
+          await deps.storeDetection({
+            asset_id: asset.id,
+            project_id: asset.projectId,
+            category: "brand",
+            name: det.label,
+            source_type: "visual",
+            source_ref: asset.filename,
+            context_snippet: `Identified ${det.label} in visual asset (${det.prominence} prominence)`,
+            confidence: det.confidence,
+            risk_level: riskResult.risk_level,
+            rationale: riskResult.rationale,
+            bounding_box: det.box_2d ? JSON.stringify(det.box_2d) : "",
+            prominence: String(det.prominence).toLowerCase(),
+            duration: "brief",
+            sentiment: "neutral",
+            narrative_role: "incidental",
+            visual_evidence: `Visual brand marker on ${asset.filename}`,
+          });
+          logToolCall("store_detection", { name: det.label, risk_level: riskResult.risk_level }, "Stored");
+        }
+      } else if (asset.type === "script") {
+        const res = await fetch(asset.cloudinaryUrl);
+        const scriptText = await res.text();
+        const scriptResult = await extractScriptEntities({ script_text: scriptText });
+        logToolCall("extract_script_entities", {}, `Found ${scriptResult.entities.length} entities`);
+
+        for (const ent of scriptResult.entities) {
+          const riskResult = await scoreRisk({
+            entity_name: ent.name,
+            category: ent.category,
+            context: ent.context_snippet,
+            prominence: "moderate",
+            source_type: "script",
+          });
+          logToolCall("score_risk", { entity_name: ent.name, category: ent.category }, `Risk: ${riskResult.risk_level}`);
+
+          await deps.storeDetection({
+            asset_id: asset.id,
+            project_id: asset.projectId,
+            category: ent.category,
+            name: ent.name,
+            source_type: "script",
+            source_ref: ent.source_ref,
+            context_snippet: ent.context_snippet,
+            confidence: ent.confidence,
+            risk_level: riskResult.risk_level,
+            rationale: riskResult.rationale,
+            bounding_box: "",
+            prominence: "moderate",
+            duration: "brief",
+            sentiment: "neutral",
+            narrative_role: "referenced_in_dialogue",
+            visual_evidence: "",
+          });
+          logToolCall("store_detection", { name: ent.name, risk_level: riskResult.risk_level }, "Stored");
+        }
+      }
+
+      detections = await deps.queryPriorDetections(asset.projectId);
+    } catch (pipelineErr) {
+      console.error("[Agent] Pipeline execution error:", pipelineErr);
+    }
+  }
 
   return {
     toolCalls: [...toolCallLog],

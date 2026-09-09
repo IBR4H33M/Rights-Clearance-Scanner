@@ -353,15 +353,19 @@ router.post(
       );
 
       const allToolCalls: ToolCallLog[] = [];
+      const storedNames = new Set<string>();
 
       // Create the dependency functions for the agent
       const deps = {
         storeDetection: async (detection: Record<string, unknown>) => {
+          const name = String(detection.name ?? "").trim();
+          if (!name || storedNames.has(name.toLowerCase())) return;
+          storedNames.add(name.toLowerCase());
           const detId = randomUUID();
           const now = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
           await executeClickHouse(
             `INSERT INTO detections (id, asset_id, project_id, category, name, source_type, source_ref, context_snippet, confidence, risk_level, rationale, bounding_box, prominence, duration, sentiment, narrative_role, visual_evidence, detected_at)
-             VALUES ('${escapeStr(detId)}', '${escapeStr(String(detection.asset_id ?? ""))}', '${escapeStr(String(detection.project_id ?? projectId))}', '${escapeStr(String(detection.category ?? "brand"))}', '${escapeStr(String(detection.name ?? ""))}', '${escapeStr(String(detection.source_type ?? ""))}', '${escapeStr(String(detection.source_ref ?? ""))}', '${escapeStr(String(detection.context_snippet ?? ""))}', ${Number(detection.confidence ?? 0.5)}, '${escapeStr(String(detection.risk_level ?? "medium"))}', '${escapeStr(String(detection.rationale ?? ""))}', '${escapeStr(String(detection.bounding_box ?? ""))}', '${escapeStr(String(detection.prominence ?? ""))}', '${escapeStr(String(detection.duration ?? ""))}', '${escapeStr(String(detection.sentiment ?? ""))}', '${escapeStr(String(detection.narrative_role ?? ""))}', '${escapeStr(String(detection.visual_evidence ?? ""))}', '${now}')`
+             VALUES ('${escapeStr(detId)}', '${escapeStr(String(detection.asset_id ?? ""))}', '${escapeStr(String(detection.project_id ?? projectId))}', '${escapeStr(String(detection.category ?? "brand"))}', '${escapeStr(name)}', '${escapeStr(String(detection.source_type ?? ""))}', '${escapeStr(String(detection.source_ref ?? ""))}', '${escapeStr(String(detection.context_snippet ?? ""))}', ${Number(detection.confidence ?? 0.5)}, '${escapeStr(String(detection.risk_level ?? "medium"))}', '${escapeStr(String(detection.rationale ?? ""))}', '${escapeStr(String(detection.bounding_box ?? ""))}', '${escapeStr(String(detection.prominence ?? ""))}', '${escapeStr(String(detection.duration ?? ""))}', '${escapeStr(String(detection.sentiment ?? ""))}', '${escapeStr(String(detection.narrative_role ?? ""))}', '${escapeStr(String(detection.visual_evidence ?? ""))}', '${now}')`
           );
         },
 
@@ -373,10 +377,11 @@ router.post(
         },
 
         fetchAssetBase64: async (url: string) => {
-          // For scripts, fetch as text; for media, fetch as buffer
-          const buffer = await fetchAssetBuffer(url);
-          const base64 = buffer.toString("base64");
-          // Infer mime type from URL extension
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`Failed to fetch asset from ${url}: ${res.status}`);
+          const headerMime = res.headers.get("content-type")?.split(";")[0]?.trim();
+          const arrayBuf = await res.arrayBuffer();
+          const base64 = Buffer.from(arrayBuf).toString("base64");
           const ext = url.split(".").pop()?.toLowerCase() ?? "";
           const mimeMap: Record<string, string> = {
             jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
@@ -384,7 +389,10 @@ router.post(
             mov: "video/quicktime", avi: "video/x-msvideo", txt: "text/plain",
             pdf: "application/pdf",
           };
-          return { base64, mimeType: mimeMap[ext] ?? "application/octet-stream" };
+          const mimeType = (headerMime && headerMime !== "application/octet-stream")
+            ? headerMime
+            : mimeMap[ext] ?? "image/jpeg";
+          return { base64, mimeType };
         },
       };
 
@@ -612,6 +620,22 @@ router.get("/projects/:projectId/reports/:reportId", async (req, res): Promise<v
   } catch (err) {
     console.error("Error fetching single report:", err);
     res.status(500).json({ error: "Failed to fetch report" });
+  }
+});
+
+// ─── DELETE /projects/:projectId/reports/:reportId ──────────────────────────
+// Delete a specific report
+
+router.delete("/projects/:projectId/reports/:reportId", async (req, res): Promise<void> => {
+  const { projectId, reportId } = req.params;
+  try {
+    await executeClickHouse(
+      `ALTER TABLE reports DELETE WHERE id = '${escapeStr(reportId)}' AND project_id = '${escapeStr(projectId)}'`
+    );
+    res.json({ success: true, message: "Report deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting report:", err);
+    res.status(500).json({ error: "Failed to delete report" });
   }
 });
 

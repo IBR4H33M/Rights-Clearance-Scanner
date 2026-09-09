@@ -146,6 +146,12 @@
   50% { opacity: 1; transform: scaleX(1); }
 }
 
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+.cursor-pointer {
+  cursor: pointer !important;
+}
+
 /* ─── Print & PDF Export Styles ────────────────────────────────────────── */
 @media print {
   body {

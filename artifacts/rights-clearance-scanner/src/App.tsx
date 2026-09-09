@@ -5,7 +5,6 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import {
-  Activity,
   AlertTriangle,
   ArrowLeft,
   ArrowUpRight,
@@ -13,6 +12,7 @@ import {
   Check,
   ChevronDown,
   CircleDashed,
+  Clapperboard,
   Download,
   Edit3,
   FileText,
@@ -414,7 +414,7 @@ function RetroLandingHero() {
         {/* Cinema Slate Header Motif */}
         <div className="inline-flex items-center gap-2 rounded border border-accent/40 bg-accent/10 px-3.5 py-1 text-xs font-mono uppercase tracking-widest text-accent-foreground mb-4">
           <Clapperboard size={13} />
-          <span>PRODUCTION CLEARANCE INTELLIGENCE · ISO/ASTM STANDARDS</span>
+          <span>AI RIGHTS & TRADEMARK CLEARANCE INTELLIGENCE</span>
         </div>
 
         {/* Large Retro Film Title */}
@@ -550,6 +550,76 @@ function RetroLandingHero() {
   );
 }
 
+// ─── Reusable Confirmation Modal ───────────────────────────────────────────
+
+interface ConfirmModalProps {
+  isOpen: boolean;
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  loading?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmModal({
+  isOpen,
+  title,
+  description,
+  confirmLabel = 'Delete',
+  cancelLabel = 'Cancel',
+  loading = false,
+  onConfirm,
+  onCancel,
+}: ConfirmModalProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+      <div
+        className="relative w-full max-w-md rounded-lg border-2 border-border/90 bg-card p-6 shadow-2xl space-y-4"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-start gap-3.5">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive border border-destructive/30">
+            <Trash2 size={18} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold tracking-tight text-foreground">{title}</h3>
+            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{description}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border/50">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className="rounded-md border border-border px-3.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors cursor-pointer"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-md bg-[#7a1212] hover:bg-[#5e0c0c] border border-[#5e0c0c] px-3.5 py-1.5 text-xs font-bold text-white/90 shadow transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {loading ? (
+              <LoaderCircle size={13} className="animate-spin text-white/90" />
+            ) : (
+              <Trash2 size={13} className="text-white/90" />
+            )}
+            <span>{confirmLabel}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Project Workspace Component ───────────────────────────────────────────
 
 function FileGlyph({ type, size = 18 }: { type: string; size?: number }) {
@@ -574,7 +644,7 @@ function MediaAssetPreview({
         type="button"
         onClick={onRemove}
         disabled={removing}
-        className="absolute right-1 top-0 z-10 grid size-6 place-items-center rounded-full bg-red-100 text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 shadow-sm"
+        className="absolute right-1 top-0 z-10 grid size-6 place-items-center rounded-full bg-red-100 text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 shadow-sm cursor-pointer"
         aria-label={`Remove ${asset.filename}`}
         title={`Remove ${asset.filename}`}
         data-testid={`button-remove-asset-${asset.id}`}
@@ -683,6 +753,30 @@ function ProjectReportsSection({
     }
   };
 
+  const [reportPendingDelete, setReportPendingDelete] = useState<string | null>(null);
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
+
+  const confirmDeleteReport = async () => {
+    if (!reportPendingDelete) return;
+    const reportId = reportPendingDelete;
+    try {
+      setDeletingReportId(reportId);
+      const token = localStorage.getItem('rcs_token') || '';
+      await fetch(`/api/projects/${projectId}/reports/${reportId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setReports((prev) => prev.filter((r) => r.id !== reportId));
+      queryClient.invalidateQueries({ queryKey: getGetProjectReportQueryKey(projectId) });
+      queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+      setReportPendingDelete(null);
+    } catch (err) {
+      alert('Failed to delete report.');
+    } finally {
+      setDeletingReportId(null);
+    }
+  };
+
   return (
     <div className="mt-10 pt-8 border-t border-border/80">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4">
@@ -696,7 +790,7 @@ function ProjectReportsSection({
           <button
             type="button"
             onClick={() => exportReportToPDF(latestReport, projectTitle)}
-            className="inline-flex items-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+            className="inline-flex items-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors cursor-pointer"
             data-testid="button-export-latest-pdf"
           >
             <Printer size={14} />
@@ -766,7 +860,7 @@ function ProjectReportsSection({
                 <button
                   type="button"
                   onClick={() => handleExportPDF(r)}
-                  className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors cursor-pointer"
                   title="Export PDF"
                   data-testid={`button-pdf-${r.id}`}
                 >
@@ -775,17 +869,41 @@ function ProjectReportsSection({
                 </button>
                 <Link
                   href={`/report/${projectId}`}
-                  className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+                  className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer"
                   data-testid={`button-view-report-${r.id}`}
                 >
                   <span>View Details</span>
                   <ArrowUpRight size={13} />
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => setReportPendingDelete(r.id)}
+                  disabled={deletingReportId === r.id}
+                  className="inline-flex items-center justify-center size-8 rounded border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/10 transition-colors cursor-pointer"
+                  title="Delete Report"
+                  data-testid={`button-delete-report-${r.id}`}
+                >
+                  {deletingReportId === r.id ? (
+                    <LoaderCircle size={13} className="animate-spin text-destructive" />
+                  ) : (
+                    <Trash2 size={13} />
+                  )}
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={Boolean(reportPendingDelete)}
+        title="Delete Clearance Report"
+        description="Are you sure you want to permanently delete this clearance report from ClickHouse? This action cannot be undone."
+        confirmLabel="Delete Report"
+        loading={Boolean(deletingReportId)}
+        onConfirm={confirmDeleteReport}
+        onCancel={() => setReportPendingDelete(null)}
+      />
     </div>
   );
 }
@@ -828,6 +946,48 @@ function Home({
   const uploadAsset = useUploadAsset();
   const deleteAsset = useDeleteAsset();
   const analyzeProject = useAnalyzeProject();
+
+  const [assetPendingDelete, setAssetPendingDelete] = useState<Project['assets'][number] | null>(null);
+
+  const executeDeleteAsset = () => {
+    if (!assetPendingDelete || !selectedProject) return;
+    const asset = assetPendingDelete;
+
+    // Instantly remove from React Query cache for zero-lag preview update
+    queryClient.setQueryData<Project[]>(
+      [...getListProjectsQueryKey(), user?.id ?? 'anonymous'],
+      (prev) =>
+        prev?.map((p) =>
+          p.id === selectedProject.id
+            ? {
+                ...p,
+                assets: p.assets.filter((a) => a.id !== asset.id),
+                assetCount: Math.max(0, p.assetCount - 1),
+              }
+            : p
+        )
+    );
+
+    deleteAsset.mutate(
+      {
+        projectId: selectedProject.id,
+        assetId: asset.id,
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetProjectReportQueryKey(selectedId ?? '') });
+        },
+        onError: (err) => {
+          queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+          alert(getErrorMessage(err, 'Failed to remove asset'));
+        },
+        onSettled: () => {
+          setAssetPendingDelete(null);
+        },
+      }
+    );
+  };
 
   const maxFileBytes = user?.maxFileSizeBytes ?? 100 * 1024 * 1024;
   const limitLabel = user?.maxFileSizeLabel ?? '100 MB';
@@ -1072,7 +1232,7 @@ function Home({
                 <div className="mt-6">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground font-mono">
-                      1. Upload Production Materials
+                      Upload Assets
                     </h3>
                     <span className="font-mono text-[10px] text-accent-foreground font-semibold bg-accent/15 px-2 py-0.5 rounded border border-accent/30">
                       Tier Limit: {limitLabel} per file
@@ -1140,13 +1300,7 @@ function Home({
                               key={asset.id}
                               asset={asset}
                               removing={deleteAsset.isPending && deleteAsset.variables?.assetId === asset.id}
-                              onRemove={() => {
-                                if (!window.confirm(`Remove ${asset.filename} from review set?`)) return;
-                                deleteAsset.mutate({
-                                  projectId: selectedProject.id,
-                                  assetId: asset.id,
-                                });
-                              }}
+                              onRemove={() => setAssetPendingDelete(asset)}
                             />
                           ))}
                       </div>
@@ -1175,7 +1329,7 @@ function Home({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <h3 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground font-mono">
-                        2. Clearance inspection
+                        Clearance inspection
                       </h3>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Invokes Gemini ADK with dynamic tool selection (logos, script text, audio transcripts, and closer-look passes)
@@ -1215,7 +1369,7 @@ function Home({
                       }`}
                     >
                       {analyzeProject.isPending ? (
-                        <Activity size={16} className="animate-pulse" />
+                        <LoaderCircle size={16} className="animate-spin" />
                       ) : selectedProject?.reportStatus === 'ready' ? (
                         <Check size={16} />
                       ) : (
@@ -1225,7 +1379,7 @@ function Home({
                     <div className="min-w-0 flex-1 text-xs">
                       <p className="font-semibold text-foreground">
                         {analyzeProject.isPending
-                          ? 'Autonomous clearance agent executing multi-tool analysis…'
+                          ? 'Executing multi-tool analysis…'
                           : selectedProject?.reportStatus === 'ready'
                           ? 'Scan complete — findings archived in ClickHouse'
                           : 'Awaiting source material'}
@@ -1272,11 +1426,11 @@ function Home({
                       <button
                         type="button"
                         onClick={() => setConfirmDelete(true)}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3.5 py-2 text-xs font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors self-start sm:self-center"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-[#7a1212] hover:bg-[#5e0c0c] border border-[#5e0c0c] px-3.5 py-2 text-xs font-semibold text-white/80 shadow-sm transition-all self-start sm:self-center cursor-pointer"
                         data-testid="button-trigger-delete-project"
                       >
-                        <Trash2 size={13} />
-                        <span>Delete Project</span>
+                        <Trash2 size={13} className="text-white/80" />
+                        <span className="text-white/80">Delete Project</span>
                       </button>
                     ) : (
                       <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
@@ -1285,17 +1439,21 @@ function Home({
                           type="button"
                           onClick={handleDeleteProject}
                           disabled={deleting}
-                          className="inline-flex items-center gap-1.5 rounded-md bg-destructive px-3.5 py-2 text-xs font-bold text-destructive-foreground shadow hover:opacity-90 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-md bg-[#7a1212] hover:bg-[#5e0c0c] border border-[#5e0c0c] px-3.5 py-2 text-xs font-bold text-white/80 shadow transition-all disabled:opacity-50 cursor-pointer"
                           data-testid="button-confirm-delete-project"
                         >
-                          {deleting ? <LoaderCircle size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                          <span>Yes, Delete</span>
+                          {deleting ? (
+                            <LoaderCircle size={13} className="animate-spin text-white/80" />
+                          ) : (
+                            <Trash2 size={13} className="text-white/80" />
+                          )}
+                          <span className="text-white/80">Yes, Delete</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setConfirmDelete(false)}
                           disabled={deleting}
-                          className="rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted"
+                          className="rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted cursor-pointer"
                         >
                           Cancel
                         </button>
@@ -1309,6 +1467,15 @@ function Home({
         </div>
       </div>
       )}
+      <ConfirmModal
+        isOpen={Boolean(assetPendingDelete)}
+        title="Remove Asset"
+        description={`Are you sure you want to remove "${assetPendingDelete?.filename}" from this production review set?`}
+        confirmLabel="Remove Asset"
+        loading={deleteAsset.isPending}
+        onConfirm={executeDeleteAsset}
+        onCancel={() => setAssetPendingDelete(null)}
+      />
     </div>
   );
 }
@@ -1318,7 +1485,13 @@ function Home({
 function ReportPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [, setLocation] = useLocation();
-  const projectsQuery = useListProjects({ query: { queryKey: getListProjectsQueryKey() } });
+  const { user } = useAuth();
+  const projectsQuery = useListProjects({
+    query: {
+      queryKey: [...getListProjectsQueryKey(), user?.id ?? 'anonymous'],
+      enabled: !!user,
+    },
+  });
   const project = projectsQuery.data?.find((item) => item.id === projectId);
 
   const reportQuery = useGetProjectReport(projectId ?? '', {
@@ -1331,6 +1504,29 @@ function ReportPage() {
   const detections = useMemo(() => reportQuery.data?.detections ?? [], [reportQuery.data?.detections]);
   const [filter, setFilter] = useState('all');
   const filtered = filter === 'all' ? detections : detections.filter((d) => d.riskLevel === filter);
+
+  const [showDeleteReportModal, setShowDeleteReportModal] = useState(false);
+  const [isDeletingReport, setIsDeletingReport] = useState(false);
+
+  const executeDeleteReport = async () => {
+    setIsDeletingReport(true);
+    try {
+      const token = localStorage.getItem('rcs_token') || '';
+      const reportId = (reportQuery.data as any)?.id ?? projectId;
+      await fetch(`/api/projects/${projectId}/reports/${reportId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      queryClient.invalidateQueries({ queryKey: getGetProjectReportQueryKey(projectId!) });
+      queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+      setShowDeleteReportModal(false);
+      setLocation('/');
+    } catch (err) {
+      alert('Failed to delete report.');
+    } finally {
+      setIsDeletingReport(false);
+    }
+  };
 
   return (
     <div className="min-h-[100dvh]">
@@ -1350,20 +1546,31 @@ function ReportPage() {
 
           <div className="flex items-center gap-3">
             {reportQuery.data && (
-              <button
-                type="button"
-                onClick={() => exportReportToPDF(reportQuery.data!, project?.title ?? 'Clearance Report')}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow hover:opacity-90 transition-opacity"
-                data-testid="button-export-pdf"
-              >
-                <Printer size={14} />
-                <span>Export as PDF</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => exportReportToPDF(reportQuery.data!, project?.title ?? 'Clearance Report')}
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow hover:opacity-90 transition-opacity cursor-pointer"
+                  data-testid="button-export-pdf"
+                >
+                  <Printer size={14} />
+                  <span>Export as PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteReportModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors cursor-pointer"
+                  data-testid="button-delete-detail-report"
+                >
+                  <Trash2 size={14} />
+                  <span>Delete Report</span>
+                </button>
+              </>
             )}
             <button
               type="button"
               onClick={() => setLocation('/')}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               data-testid="button-back-workspace"
             >
               <ArrowLeft size={14} />
@@ -1476,6 +1683,16 @@ function ReportPage() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={showDeleteReportModal}
+        title="Delete Clearance Report"
+        description="Are you sure you want to permanently delete this production clearance report from ClickHouse? You will be redirected back to the workspace."
+        confirmLabel="Delete Report"
+        loading={isDeletingReport}
+        onConfirm={executeDeleteReport}
+        onCancel={() => setShowDeleteReportModal(false)}
+      />
     </div>
   );
 }
@@ -1922,7 +2139,8 @@ function AppShellWithState() {
   const { user } = useAuth();
   const projectsQuery = useListProjects({
     query: {
-      queryKey: getListProjectsQueryKey(),
+      queryKey: [...getListProjectsQueryKey(), user?.id ?? 'anonymous'],
+      enabled: !!user,
     },
   });
 
