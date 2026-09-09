@@ -9,6 +9,7 @@ COPY artifacts/ artifacts/
 COPY scripts/ scripts/
 COPY tsconfig.base.json tsconfig.json ./
 
+ENV PNPM_ENABLE_UNSAFE_LIFECYCLE_SCRIPTS=true
 RUN pnpm install --frozen-lockfile
 RUN pnpm run build
 
