@@ -170,10 +170,45 @@
   50% { opacity: 1; transform: scaleX(1); }
 }
 
+/* ─── Global Button Hover Effects (Fill color shift, no shade or glow) ─── */
 button:not(:disabled),
 [role="button"]:not([aria-disabled="true"]),
+a.inline-flex[class*="bg-"],
 .cursor-pointer {
   cursor: pointer !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, filter 0.15s ease !important;
+}
+
+button:not(:disabled):hover,
+[role="button"]:not([aria-disabled="true"]):hover,
+a.inline-flex[class*="bg-"]:hover {
+  filter: brightness(1.12);
+  box-shadow: none !important;
+  text-shadow: none !important;
+  outline: none;
+}
+
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active,
+a.inline-flex[class*="bg-"]:active {
+  filter: brightness(0.92);
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* For buttons with transparent/subtle background, shift fill on hover */
+button.border:not([class*="bg-"]):not(:disabled):hover,
+button.border-border:not([class*="bg-"]):not(:disabled):hover {
+  background-color: hsl(var(--muted) / 0.5) !important;
+  box-shadow: none !important;
+}
+
+button[class*="hover:bg-"]:not(:disabled):hover,
+a[class*="hover:bg-"]:hover {
+  box-shadow: none !important;
+  text-shadow: none !important;
 }
 
 /* ─── Print & PDF Export Styles ────────────────────────────────────────── */

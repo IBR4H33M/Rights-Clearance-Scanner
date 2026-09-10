@@ -211,7 +211,7 @@ function SidebarProjectPicker({
                 type="button"
                 onClick={submit}
                 disabled={!title.trim() || createProject.isPending}
-                className="grid place-items-center rounded bg-sidebar-primary px-2.5 text-sidebar-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
+                className="grid place-items-center rounded bg-sidebar-primary px-2.5 text-sidebar-primary-foreground disabled:opacity-40 hover:bg-sidebar-primary/80 transition-colors"
                 data-testid="button-create-project"
                 title="Create Project"
               >
@@ -360,7 +360,7 @@ function Shell({
           ) : (
             <Link
               href="/"
-              className="flex items-center justify-center gap-2 w-full py-2 rounded bg-sidebar-primary text-sidebar-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity"
+              className="flex items-center justify-center gap-2 w-full py-2 rounded bg-sidebar-primary text-sidebar-primary-foreground text-xs font-semibold hover:bg-sidebar-primary/80 transition-colors"
             >
               <User size={13} />
               <span>Sign In / Demo</span>
@@ -486,7 +486,7 @@ function RetroLandingHero() {
                   type="button"
                   onClick={() => startDemo()}
                   disabled={loading}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/85 transition-colors disabled:opacity-50"
                   data-testid="button-launch-demo"
                 >
                   {loading ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={15} fill="currentColor" />}
@@ -529,7 +529,7 @@ function RetroLandingHero() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/85 transition-colors disabled:opacity-50"
                   data-testid="button-auth-submit"
                 >
                   {loading && <LoaderCircle size={15} className="animate-spin" />}
@@ -870,7 +870,7 @@ function ProjectReportsSection({
                 </button>
                 <Link
                   href={`/report/${projectId}`}
-                  className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer"
+                  className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/85 transition-colors cursor-pointer"
                   data-testid={`button-view-report-${r.id}`}
                 >
                   <span>View Details</span>
@@ -1367,7 +1367,7 @@ function Home({
                         type="button"
                         onClick={handleRenameProject}
                         disabled={renaming || !editTitleValue.trim()}
-                        className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/85 transition-colors disabled:opacity-50"
                         data-testid="button-save-project-title"
                       >
                         {renaming ? <LoaderCircle size={13} className="animate-spin" /> : <Check size={13} />}
@@ -1521,7 +1521,7 @@ function Home({
                       type="button"
                       onClick={runAnalysis}
                       disabled={!selectedProject?.assetCount || analyzeProject.isPending}
-                      className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-md transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-40"
                       data-testid="button-run-analysis"
                     >
                       {analyzeProject.isPending ? (
@@ -1742,7 +1742,7 @@ function ReportPage() {
                 <button
                   type="button"
                   onClick={() => exportReportToPDF(reportQuery.data!, project?.title ?? 'Clearance Report')}
-                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow hover:opacity-90 transition-opacity cursor-pointer"
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/85 transition-colors cursor-pointer"
                   data-testid="button-export-pdf"
                 >
                   <Printer size={14} />
@@ -1777,7 +1777,7 @@ function ReportPage() {
               <div className="mt-5">
                 <Link
                   href="/"
-                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/85 transition-colors"
                 >
                   <span>Open Production Workspace</span>
                   <ArrowUpRight size={14} />
@@ -2625,7 +2625,7 @@ function ErrorScreen({
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/85 transition-colors"
             data-testid="button-retry"
           >
             <RefreshCcw size={13} />
