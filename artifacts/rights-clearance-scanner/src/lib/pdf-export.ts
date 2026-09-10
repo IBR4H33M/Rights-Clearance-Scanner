@@ -36,7 +36,7 @@ export function exportReportToPDF(report: Report & { name?: string }, projectTit
       <div style="border-bottom: 1px solid #e5e7eb; padding: 14px 0; page-break-inside: avoid;">
         <div style="display: flex; justify-content: space-between; align-items: baseline;">
           <div>
-            <span style="font-family: monospace; font-size: 11px; color: #6b7280; margin-right: 8px;">#${String(
+            <span style="font-size: 11px; color: #6b7280; margin-right: 8px; font-weight: bold;">#${String(
               i + 1
             ).padStart(2, '0')}</span>
             <strong style="font-size: 15px; color: #111827;">${d.name}</strong>
@@ -44,7 +44,7 @@ export function exportReportToPDF(report: Report & { name?: string }, projectTit
               ${d.category.replace('_', ' ')}
             </span>
           </div>
-          <span style="font-family: monospace; font-weight: bold; font-size: 11px; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; background: ${
+          <span style="font-weight: bold; font-size: 11px; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; background: ${
             d.riskLevel === 'high'
               ? '#fee2e2; color: #991b1b;'
               : d.riskLevel === 'medium'
@@ -82,7 +82,7 @@ export function exportReportToPDF(report: Report & { name?: string }, projectTit
         <h3 style="font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #111827; padding-bottom: 4px; margin-bottom: 12px;">
           Agentic Autonomous Decision Trail (${(report as any).toolCalls.length} Tool Executions)
         </h3>
-        <table style="width: 100%; border-collapse: collapse; font-size: 11px; font-family: monospace;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
           <thead>
             <tr style="background: #f3f4f6; text-align: left;">
               <th style="padding: 6px 8px; border: 1px solid #e5e7eb;">Step</th>
@@ -173,7 +173,7 @@ export function exportReportToPDF(report: Report & { name?: string }, projectTit
               </div>
             </div>
             <div style="text-align: right;">
-              <div style="font-family: monospace; font-size: 12px; font-weight: bold; color: #374151;">
+              <div style="font-size: 12px; font-weight: bold; color: #374151;">
                 REPORT ID: ${report.name || (report as any).id?.slice(0, 12) || 'RPT-CLEARANCE'}
               </div>
               <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">

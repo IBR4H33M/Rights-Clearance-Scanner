@@ -413,7 +413,7 @@ function RetroLandingHero() {
 
       <div className="mx-auto max-w-4xl text-center">
         {/* Cinema Slate Header Motif */}
-        <div className="inline-flex items-center gap-2 rounded border border-accent/40 bg-accent/10 px-3.5 py-1 text-xs font-mono uppercase tracking-widest text-accent-foreground mb-4">
+        <div className="inline-flex items-center gap-2 rounded border border-accent/40 bg-accent/10 px-3.5 py-1 text-xs font-semibold uppercase tracking-widest text-accent-foreground mb-4">
           <Clapperboard size={13} />
           <span>AI RIGHTS & TRADEMARK CLEARANCE INTELLIGENCE</span>
         </div>
@@ -496,7 +496,7 @@ function RetroLandingHero() {
             ) : (
               <>
                 <div>
-                  <label className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                  <label className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
                     Username
                   </label>
                   <input
@@ -510,7 +510,7 @@ function RetroLandingHero() {
                   />
                 </div>
                 <div>
-                  <label className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                  <label className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
                     Password
                   </label>
                   <input
@@ -523,7 +523,7 @@ function RetroLandingHero() {
                     data-testid="input-auth-password"
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground font-mono">
+                <p className="text-[11px] text-muted-foreground">
                   {authMode === 'register' ? '✓ Studio accounts receive 400 MB file upload limit.' : '✓ Access your saved productions & ClickHouse reports.'}
                 </p>
                 <button
@@ -687,7 +687,7 @@ function RiskBadge({ level }: { level: string }) {
   } as Record<string, string>;
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider ${
+      className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
         styles[level] ?? 'bg-muted text-muted-foreground border-border'
       }`}
       data-testid={`status-risk-${level}`}
@@ -823,13 +823,13 @@ function ProjectReportsSection({
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2.5">
-                  <span className="font-mono text-[10px] uppercase font-bold text-muted-foreground">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground">
                     #{reports.length - idx}
                   </span>
                   <h3 className="font-semibold text-sm text-foreground truncate">{r.name}</h3>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{r.summary}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[10px] text-muted-foreground">
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                   <span>{formatDate(r.generatedAt)}</span>
                   <span>·</span>
                   <span>{r.analyzedAssets} assets</span>
@@ -986,7 +986,7 @@ function ClearanceAgentTerminal({
   ];
 
   return (
-    <div className="mt-4 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 font-mono text-xs text-zinc-300 shadow-2xl animate-in fade-in-50 duration-200">
+    <div className="mt-4 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 text-xs text-zinc-300 shadow-2xl animate-in fade-in-50 duration-200">
       {/* Terminal Title Bar */}
       <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/90 px-3.5 py-2">
         <div className="flex items-center gap-2">
@@ -1045,7 +1045,7 @@ function ClearanceAgentTerminal({
                     : 'text-zinc-600 opacity-60'
                 }`}
               >
-                <span className="shrink-0 font-bold w-6 text-center font-mono">
+                <span className="shrink-0 font-bold w-6 text-center">
                   {isDone ? (
                     <span className="text-emerald-400 font-bold">[✓]</span>
                   ) : isCurrent ? (
@@ -1059,7 +1059,7 @@ function ClearanceAgentTerminal({
                     <span className={isCurrent ? 'text-amber-300 font-bold' : isDone ? 'text-zinc-200' : 'text-zinc-500'}>
                       {step.label}
                     </span>
-                    <span className="rounded bg-zinc-850 border border-zinc-800 px-1.5 py-0.2 text-[9px] text-zinc-400 font-mono">
+                    <span className="rounded bg-zinc-850 border border-zinc-800 px-1.5 py-0.2 text-[9px] text-zinc-400">
                       {step.agent}
                     </span>
                     {isCurrent && (
@@ -1078,7 +1078,7 @@ function ClearanceAgentTerminal({
         {/* Live Command Line Prompt */}
         <div className="pt-2 border-t border-zinc-800/60 flex items-center gap-2 text-[11px] text-zinc-500">
           <span className="text-emerald-400 font-bold">adk@gemini-runner:~$</span>
-          <span className="text-zinc-300 font-mono">
+          <span className="text-zinc-300">
             {activeStep >= steps.length ? 'Finalizing clearance report payload…' : `${steps[activeStep]?.agent} processing…`}
           </span>
           <span className="inline-block w-2 h-3.5 bg-amber-400 animate-pulse" />
@@ -1415,7 +1415,7 @@ function Home({
                       Upload Assets
                     </h3>
                     <div className="mt-1">
-                      <span className="font-mono text-[10px] text-accent-foreground font-semibold bg-accent/15 px-2 py-0.5 rounded border border-accent/30">
+                      <span className="text-[10px] text-accent-foreground font-semibold bg-accent/15 px-2 py-0.5 rounded border border-accent/30">
                         Tier Limit: {limitLabel} per file
                       </span>
                     </div>
@@ -1719,7 +1719,7 @@ function ReportPage() {
               {project?.title ?? 'Production Clearance Report'}
             </h1>
             {reportQuery.data && (
-              <p className="mt-1.5 text-xs text-muted-foreground font-mono">
+              <p className="mt-1.5 text-xs text-muted-foreground">
                 Generated {formatDate(reportQuery.data.generatedAt)} · {reportQuery.data.analyzedAssets} source assets reviewed
               </p>
             )}
@@ -1829,7 +1829,7 @@ function ReportPage() {
                       type="button"
                       key={value}
                       onClick={() => setFilter(value)}
-                      className={`rounded px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider font-bold transition-colors ${
+                      className={`rounded px-2.5 py-1 text-[9px] uppercase tracking-wider font-bold transition-colors ${
                         filter === value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                       }`}
                       data-testid={`button-filter-${value}`}
@@ -2012,7 +2012,7 @@ function ImageBoundingBox({
       style={style}
     >
       <span
-        className="absolute -top-6 left-[-2px] whitespace-nowrap px-1.5 py-0.5 font-mono text-[9px] font-bold shadow-md rounded-t-sm bg-[#00e600] text-black"
+        className="absolute -top-6 left-[-2px] whitespace-nowrap px-1.5 py-0.5 text-[9px] font-bold shadow-md rounded-t-sm bg-[#00e600] text-black"
       >
         {detectionName}
       </span>
@@ -2097,13 +2097,13 @@ function VideoFrameSnippet({
 
       {/* Filename between snippet and timestamp */}
       {filename && (
-        <p className="mt-1.5 font-mono text-[10px] text-gray-500 truncate max-w-[440px]" title={filename}>
+        <p className="mt-1.5 text-[10px] text-gray-500 truncate max-w-[440px]" title={filename}>
           {filename}
         </p>
       )}
 
       {/* Timestamp — larger, navy blue */}
-      <p className="mt-1 text-base font-mono font-bold tracking-tight" style={{ color: '#1e3a5f' }}>
+      <p className="mt-1 text-base font-bold tracking-tight" style={{ color: '#1e3a5f' }}>
         Detected at: {timeStr}
       </p>
     </div>
@@ -2137,17 +2137,17 @@ function EvidencePreview({
             <span className="p-1.5 rounded bg-white/10 text-white">
               <Volume2 size={15} />
             </span>
-            <span className="font-mono text-xs font-bold uppercase tracking-wider text-white">
+            <span className="text-xs font-bold uppercase tracking-wider text-white">
               Audio Dialogue & Subtitles
             </span>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-md bg-black/50 px-2.5 py-1 text-xs font-mono font-bold text-amber-300 border border-amber-500/30">
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-black/50 px-2.5 py-1 text-xs font-bold text-amber-300 border border-amber-500/30">
             <Clock size={12} />
             <span>Timestamp: {timeInfo.timeStr}</span>
           </span>
         </div>
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-wider opacity-75 font-semibold mb-1">
+          <p className="text-[10px] uppercase tracking-wider opacity-75 font-semibold mb-1">
             Spoken Subtitle Text
           </p>
           <blockquote className="rounded-md border-l-3 border-amber-400 bg-black/40 p-3 text-sm italic leading-relaxed text-white font-medium">
@@ -2155,7 +2155,7 @@ function EvidencePreview({
           </blockquote>
         </div>
         {preview?.filename && (
-          <p className="mt-2 text-[10px] opacity-70 font-mono">
+          <p className="mt-2 text-[10px] opacity-70">
             Audio Track: {preview.filename}
           </p>
         )}
@@ -2186,7 +2186,7 @@ function EvidencePreview({
           <span>Source Evidence Frame</span>
         </span>
         {preview.filename && (
-          <span className="font-mono text-[10px] opacity-70 truncate max-w-[200px]" title={preview.filename}>
+          <span className="text-[10px] opacity-70 truncate max-w-[200px]" title={preview.filename}>
             {preview.filename}
           </span>
         )}
@@ -2301,7 +2301,7 @@ function DetectionRow({
             <EvidencePreview detection={detection} preview={preview} index={index} />
             {detection.contextSnippet && (
               <>
-                <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground font-bold mb-1">Context</p>
+                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold mb-1">Context</p>
                 <p className="text-xs leading-relaxed italic p-3 rounded-md bg-muted/40 border border-border text-foreground mb-3">
                   &ldquo;{detection.contextSnippet}&rdquo;
                 </p>
@@ -2314,25 +2314,25 @@ function DetectionRow({
                 <tbody>
                   {detection.prominence && (
                     <tr className="border-b border-border/30">
-                      <td className="py-1 pr-4 font-mono text-[10px] uppercase tracking-wider text-muted-foreground font-semibold w-28">Prominence</td>
+                      <td className="py-1 pr-4 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold w-28">Prominence</td>
                       <td className="py-1 text-foreground capitalize">{detection.prominence}</td>
                     </tr>
                   )}
                   {detection.duration && (
                     <tr className="border-b border-border/30">
-                      <td className="py-1 pr-4 font-mono text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Duration</td>
+                      <td className="py-1 pr-4 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Duration</td>
                       <td className="py-1 text-foreground capitalize">{detection.duration}</td>
                     </tr>
                   )}
                   {detection.sentiment && (
                     <tr className="border-b border-border/30">
-                      <td className="py-1 pr-4 font-mono text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Sentiment</td>
+                      <td className="py-1 pr-4 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Sentiment</td>
                       <td className="py-1 text-foreground capitalize">{detection.sentiment}</td>
                     </tr>
                   )}
                   {detection.narrativeRole && (
                     <tr>
-                      <td className="py-1 pr-4 font-mono text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Role</td>
+                      <td className="py-1 pr-4 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Role</td>
                       <td className="py-1 text-foreground capitalize">{detection.narrativeRole}</td>
                     </tr>
                   )}
@@ -2397,11 +2397,11 @@ function AgentReasoningPanel({ toolCalls }: { toolCalls?: ToolCallEntry[] }) {
           <div className="space-y-2">
             {toolCalls.map((tc, i) => (
               <div key={i} className="flex items-start gap-3 text-xs">
-                <span className="mt-0.5 font-mono text-[9px] text-muted-foreground/60 tabular-nums shrink-0">
+                <span className="mt-0.5 text-[9px] text-muted-foreground/60 tabular-nums shrink-0 font-medium">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <span
-                  className={`inline-flex shrink-0 items-center rounded px-2 py-0.5 font-mono text-[9px] font-bold ${
+                  className={`inline-flex shrink-0 items-center rounded px-2 py-0.5 text-[9px] font-bold ${
                     toolColors[tc.tool] ?? 'bg-muted text-muted-foreground'
                   }`}
                 >
@@ -2479,7 +2479,7 @@ function AnalyticsPage() {
             { label: 'Assets Inspected', value: data.totalStats.totalAssets },
           ].map((stat) => (
             <div key={stat.label} className="rounded-xl border border-border bg-card p-5 shadow-sm">
-              <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground font-bold">
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">
                 {stat.label}
               </p>
               <p className="mt-2 text-3xl font-bold tracking-tight text-foreground">{stat.value}</p>
@@ -2503,7 +2503,7 @@ function AnalyticsPage() {
                     <div key={item.riskLevel}>
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold uppercase">{item.riskLevel}</span>
-                        <span className="font-mono text-muted-foreground">
+                        <span className="text-muted-foreground font-semibold">
                           {item.count} ({pct.toFixed(0)}%)
                         </span>
                       </div>
@@ -2534,7 +2534,7 @@ function AnalyticsPage() {
                   return (
                     <div key={item.category} className="flex items-center justify-between rounded-md bg-muted/40 px-3.5 py-2.5 text-xs">
                       <span className="font-medium text-foreground">{categoryLabel(item.category)}</span>
-                      <span className="font-mono text-muted-foreground font-semibold">
+                      <span className="text-muted-foreground font-semibold">
                         {item.count} ({pct.toFixed(0)}%)
                       </span>
                     </div>
@@ -2557,16 +2557,16 @@ function AnalyticsPage() {
             ) : (
               data.topBrands.map((brand, i) => (
                 <div key={`${brand.name}-${i}`} className="flex items-center gap-3 text-xs">
-                  <span className="w-5 font-mono text-muted-foreground font-bold">{i + 1}.</span>
+                  <span className="w-5 text-muted-foreground font-bold">{i + 1}.</span>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-foreground">{brand.name}</span>
-                        <span className="font-mono text-[9px] uppercase text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        <span className="text-[9px] uppercase text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-semibold">
                           {categoryLabel(brand.category)}
                         </span>
                       </div>
-                      <span className="font-mono text-muted-foreground font-semibold">
+                      <span className="text-muted-foreground font-semibold">
                         {brand.detectionCount}×
                       </span>
                     </div>
@@ -2594,7 +2594,7 @@ function LoadingScreen({ label }: { label: string }) {
     <div className="flex min-h-[45vh] items-center justify-center">
       <div className="text-center">
         <LoaderCircle size={24} className="mx-auto animate-spin text-accent" />
-        <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground" data-testid="status-loading">
+        <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground" data-testid="status-loading">
           {label}
         </p>
       </div>
