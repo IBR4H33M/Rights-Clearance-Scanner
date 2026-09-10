@@ -150,9 +150,8 @@ function SidebarProjectPicker({
 
   return (
     <div className="relative my-4 space-y-2">
-      <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/60 px-1">
+      <div className="text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/60 px-1">
         <span>Active Project</span>
-        <span>{projects.length} Total</span>
       </div>
 
       <button
@@ -261,12 +260,6 @@ function Shell({
       : `${user.username}’s Workspace`
     : 'Studio Workspace';
 
-  const tierBadge = user
-    ? user.role === 'demo'
-      ? 'DEMO · 100MB LIMIT'
-      : 'REGISTERED · 400MB LIMIT'
-    : 'GUEST ACCESS';
-
   if (!user) {
     return (
       <main className="min-h-[100dvh] bg-background text-foreground">
@@ -280,29 +273,28 @@ function Shell({
       {/* Left Sidebar (only shown when authenticated or demo) */}
       <aside className="border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground md:min-h-[100dvh] flex flex-col justify-between">
         <div className="px-5 py-5">
-          {/* Top of Left Bar: RightScan Title */}
+          {/* Top of Left Bar: RightScan Title & Icon */}
           <div className="pb-3.5 mb-4 border-b border-sidebar-border/40">
             <Link
               href="/"
-              className="inline-flex items-center gap-2 group cursor-pointer"
+              className="inline-flex items-center gap-2.5 group cursor-pointer"
               title="Return to RightScan Workspace"
             >
+              <img
+                src="/icon.png"
+                alt="RightScan"
+                className="w-6 h-6 object-contain rounded shrink-0"
+              />
               <span className="text-xl font-black tracking-tight text-sidebar-foreground group-hover:text-sidebar-primary transition-colors cinema-title">
                 RightScan
               </span>
             </Link>
-            <span className="block font-mono text-[9px] uppercase tracking-widest text-sidebar-foreground/60 mt-0.5 font-semibold">
-              AI Rights Clearance
-            </span>
           </div>
 
-          {/* Workspace Name & Tier */}
+          {/* Workspace Name */}
           <div className="pb-4 border-b border-sidebar-border/40">
             <span className="block truncate text-sm font-bold tracking-tight text-sidebar-foreground">
               {workspaceTitle}
-            </span>
-            <span className="inline-block font-mono text-[9px] font-semibold tracking-wider text-sidebar-primary/90 mt-0.5">
-              {tierBadge}
             </span>
           </div>
 
