@@ -994,12 +994,9 @@ function ClearanceAgentTerminal({
             rightscan-agent-runner — project_{projectId.slice(0, 8)}
           </span>
         </div>
-        <div className="flex items-center gap-2.5 text-[10px]">
-          <span className="inline-flex items-center gap-1.5 text-emerald-400 font-bold">
-            <span className="size-1.5 rounded-full bg-emerald-400 animate-ping" />
-            LIVE AGENT RUN
-          </span>
-          <span className="text-zinc-500 font-bold">[{elapsedSec}s]</span>
+        <div className="flex items-center gap-2 text-[10px]">
+          <span className="text-zinc-400">Elapsed time:</span>
+          <span className="text-zinc-300 font-bold">[{elapsedSec}s]</span>
         </div>
       </div>
 
@@ -1008,27 +1005,22 @@ function ClearanceAgentTerminal({
         {/* Connection & Configuration Info */}
         <div className="space-y-1 pb-3 border-b border-zinc-800/80 text-[11px]">
           <div className="flex items-center gap-2">
-            <span className="text-emerald-400 font-bold">[✓]</span>
             <span className="text-zinc-400">Google AI Studio API Status:</span>
-            <span className="text-emerald-400 font-bold">CONNECTED</span>
+            <span className="text-zinc-300">CONNECTED</span>
             <span className="text-zinc-500">(endpoint: v1beta/models, tls: active)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-emerald-400 font-bold">[✓]</span>
             <span className="text-zinc-400">Foundation Model:</span>
-            <span className="text-amber-300 font-bold">gemini-2.5-flash</span>
+            <span className="text-sky-300 font-bold">gemini-2.5-flash</span>
             <span className="text-zinc-500">(multimodal vision + audio context enabled)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-emerald-400 font-bold">[✓]</span>
-            <span className="text-zinc-400">Google Agent Kit (ADK):</span>
-            <span className="text-cyan-300 font-bold">ACTIVE (v1.52.0)</span>
+            <span className="text-zinc-300">Google Agent Development Kit v1.52.0</span>
             <span className="text-zinc-500">(dynamic multi-tool coordinator)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-emerald-400 font-bold">[✓]</span>
             <span className="text-zinc-400">Audit Database:</span>
-            <span className="text-purple-300 font-bold">ClickHouse Cloud</span>
+            <span className="text-zinc-300">ClickHouse Cloud Status: Connected</span>
             <span className="text-zinc-500">(hms2rsrq6s.ap-southeast-1.aws, port 8443)</span>
           </div>
         </div>
