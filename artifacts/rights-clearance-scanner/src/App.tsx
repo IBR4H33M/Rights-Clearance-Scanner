@@ -1819,30 +1819,25 @@ function ReportPage() {
           <div className="space-y-6">
             {/* Risk Summary Banner */}
             <section className="rounded-xl border border-border bg-card p-6 sm:p-7 shadow-sm">
-              <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
-                <div className="max-w-2xl">
-                  <p className="text-[clamp(1.2rem,2.5vw,1.8rem)] font-semibold leading-snug tracking-tight text-foreground">
-                    {reportQuery.data.summary}
+              <p className="text-[clamp(1.2rem,2.5vw,1.8rem)] font-semibold leading-snug tracking-tight text-foreground">
+                {reportQuery.data.summary}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-4">
+                {reportQuery.data.counts.high > 0 && (
+                  <p className="text-sm font-semibold text-red-700" data-testid="report-stat-high">
+                    {reportQuery.data.counts.high} {reportQuery.data.counts.high === 1 ? 'high risk reference' : 'high risk references'}
                   </p>
-                </div>
-                <div className="grid grid-cols-3 gap-3 min-w-[280px]">
-                  {(['high', 'medium', 'low'] as const).map((level) => (
-                    <div
-                      key={level}
-                      className={`rounded-lg border p-3 text-center ${
-                        level === 'high'
-                          ? 'bg-red-50/70 border-red-200 text-red-900'
-                          : level === 'medium'
-                          ? 'bg-amber-50/70 border-amber-200 text-amber-900'
-                          : 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
-                      }`}
-                      data-testid={`report-stat-${level}`}
-                    >
-                      <p className="font-mono text-[9px] uppercase font-bold tracking-wider opacity-75">{level}</p>
-                      <p className="mt-1 text-2xl font-bold tracking-tight">{reportQuery.data.counts[level]}</p>
-                    </div>
-                  ))}
-                </div>
+                )}
+                {reportQuery.data.counts.medium > 0 && (
+                  <p className="text-sm font-semibold text-amber-700" data-testid="report-stat-medium">
+                    {reportQuery.data.counts.medium} {reportQuery.data.counts.medium === 1 ? 'medium risk reference' : 'medium risk references'}
+                  </p>
+                )}
+                {reportQuery.data.counts.low > 0 && (
+                  <p className="text-sm font-semibold text-emerald-700" data-testid="report-stat-low">
+                    {reportQuery.data.counts.low} {reportQuery.data.counts.low === 1 ? 'low risk reference' : 'low risk references'}
+                  </p>
+                )}
               </div>
             </section>
 
@@ -1873,7 +1868,7 @@ function ReportPage() {
               {filtered.length === 0 ? (
                 <div className="p-12 text-center text-sm text-muted-foreground">No detections in this filter view.</div>
               ) : (
-                <div className="space-y-4">
+                <div className="px-6 py-2">
                   {filtered.map((detection, index) => (
                     <DetectionRow
                       detection={detection}
@@ -2055,35 +2050,15 @@ function ImageBoundingBox({
   prominence?: string | null;
 }) {
   const style = computeBoundingBoxStyle(box, detectionName, prominence);
-  const colorScheme =
-    riskLevel === 'high'
-      ? {
-          box: 'border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.85)]',
-          label: 'bg-red-600 text-white',
-          dot: 'bg-white',
-        }
-      : riskLevel === 'medium'
-      ? {
-          box: 'border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.85)]',
-          label: 'bg-amber-600 text-white',
-          dot: 'bg-white',
-        }
-      : {
-          box: 'border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.85)]',
-          label: 'bg-emerald-600 text-white',
-          dot: 'bg-white',
-        };
-
   return (
     <div
       aria-label={`Bounding box for ${detectionName}`}
-      className={`pointer-events-none absolute border-2 ${colorScheme.box} transition-all z-10`}
+      className="pointer-events-none absolute border-2 border-[#00e600] z-10"
       style={style}
     >
       <span
-        className={`absolute -top-6 left-[-2px] whitespace-nowrap px-1.5 py-0.5 font-mono text-[9px] font-bold shadow-md rounded-t-sm flex items-center gap-1 ${colorScheme.label}`}
+        className="absolute -top-6 left-[-2px] whitespace-nowrap px-1.5 py-0.5 font-mono text-[9px] font-bold shadow-md rounded-t-sm bg-[#00e600] text-black"
       >
-        <span className={`size-1.5 rounded-full ${colorScheme.dot} animate-pulse`} />
         {detectionName}
       </span>
     </div>
@@ -2124,20 +2099,13 @@ function VideoFrameSnippet({
 
   return (
     <div className="mb-4">
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className="font-mono text-[10px] uppercase tracking-wider opacity-85 font-semibold flex items-center gap-1.5">
-          <Film size={12} />
-          <span>Video Frame Snippet Preview</span>
-        </span>
-        {filename && (
-          <span className="font-mono text-[10px] opacity-70 truncate max-w-[220px]" title={filename}>
-            {filename}
-          </span>
-        )}
-      </div>
+      <p className="font-mono text-[10px] uppercase tracking-wider opacity-70 font-semibold flex items-center gap-1.5 mb-1.5">
+        <Film size={12} />
+        <span>Video Frame Snippet Preview</span>
+      </p>
 
       {/* Snippet Photo Frame */}
-      <div className="relative max-w-[440px] aspect-video overflow-hidden rounded-md border border-white/20 bg-black group shadow-sm">
+      <div className="relative max-w-[440px] aspect-video overflow-hidden rounded-md border border-white/20 bg-black shadow-sm">
         {cloudinaryThumbnailUrl && !imageFailed ? (
           <img
             src={cloudinaryThumbnailUrl}
@@ -2166,9 +2134,16 @@ function VideoFrameSnippet({
         />
       </div>
 
-      {/* Timestamp below snippet in textual format, not inside a dark box */}
-      <p className="mt-2 text-sm sm:text-base font-mono font-bold text-amber-300 tracking-tight">
-        timestamp {timeStr}
+      {/* Filename between snippet and timestamp */}
+      {filename && (
+        <p className="mt-1.5 font-mono text-[10px] text-gray-500 truncate max-w-[440px]" title={filename}>
+          {filename}
+        </p>
+      )}
+
+      {/* Timestamp — larger, navy blue */}
+      <p className="mt-1 text-base font-mono font-bold tracking-tight" style={{ color: '#1e3a5f' }}>
+        Detected at: {timeStr}
       </p>
     </div>
   );
@@ -2308,119 +2283,93 @@ function DetectionRow({
     detection.category === 'song';
   const isVideo = preview?.type === 'video';
 
-  const riskTheme = {
-    high: {
-      card: 'bg-red-950/40 border-2 border-red-800/80 hover:border-red-600/90 text-red-50 shadow-[0_4px_24px_rgba(185,28,28,0.25)]',
-      title: 'text-white font-extrabold',
-      subtitle: 'text-red-200/90',
-      typeBadge: 'bg-red-900/70 text-red-100 border border-red-700/60',
-      categoryBadge: 'bg-red-900/60 text-red-200 border border-red-700/50',
-      borderDivider: 'border-red-700/50',
-      snippetBox: 'bg-red-950/70 border border-red-800/60 text-red-100',
-      kicker: 'text-red-300 font-bold',
-      detailText: 'text-red-100/95',
-      metaBadge: 'bg-red-900/50 text-red-200 border border-red-800/40',
-    },
-    medium: {
-      card: 'bg-amber-950/35 border-2 border-amber-800/80 hover:border-amber-600/90 text-amber-50 shadow-[0_4px_24px_rgba(217,119,6,0.22)]',
-      title: 'text-white font-extrabold',
-      subtitle: 'text-amber-200/90',
-      typeBadge: 'bg-amber-900/70 text-amber-100 border border-amber-700/60',
-      categoryBadge: 'bg-amber-900/60 text-amber-200 border border-amber-700/50',
-      borderDivider: 'border-amber-700/50',
-      snippetBox: 'bg-amber-950/70 border border-amber-800/60 text-amber-100',
-      kicker: 'text-amber-300 font-bold',
-      detailText: 'text-amber-100/95',
-      metaBadge: 'bg-amber-900/50 text-amber-200 border border-amber-800/40',
-    },
-    low: {
-      card: 'bg-emerald-950/35 border-2 border-emerald-800/80 hover:border-emerald-600/90 text-emerald-50 shadow-[0_4px_24px_rgba(16,185,129,0.22)]',
-      title: 'text-white font-extrabold',
-      subtitle: 'text-emerald-200/90',
-      typeBadge: 'bg-emerald-900/70 text-emerald-100 border border-emerald-700/60',
-      categoryBadge: 'bg-emerald-900/60 text-emerald-200 border border-emerald-700/50',
-      borderDivider: 'border-emerald-700/50',
-      snippetBox: 'bg-emerald-950/70 border border-emerald-800/60 text-emerald-100',
-      kicker: 'text-emerald-300 font-bold',
-      detailText: 'text-emerald-100/95',
-      metaBadge: 'bg-emerald-900/50 text-emerald-200 border border-emerald-800/40',
-    },
-  }[detection.riskLevel] ?? {
-    card: 'bg-card border-2 border-border text-foreground',
-    title: 'text-foreground font-bold',
-    subtitle: 'text-muted-foreground',
-    typeBadge: 'bg-muted text-foreground border border-border',
-    categoryBadge: 'bg-muted text-muted-foreground border border-border',
-    borderDivider: 'border-border',
-    snippetBox: 'bg-muted/40 border border-border text-foreground',
-    kicker: 'text-muted-foreground font-bold',
-    detailText: 'text-foreground',
-    metaBadge: 'bg-muted text-muted-foreground border border-border',
-  };
+  const riskColor = detection.riskLevel === 'high'
+    ? 'text-red-700'
+    : detection.riskLevel === 'medium'
+    ? 'text-amber-700'
+    : 'text-emerald-700';
 
   return (
     <article
-      className={`rounded-xl p-5 sm:px-6 transition-all duration-200 ${riskTheme.card}`}
+      className="py-4 border-b border-border/40 last:border-0"
       data-testid={`row-detection-${detection.id}`}
     >
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-start justify-between gap-4 text-left cursor-pointer"
+        className="flex w-full items-center justify-between gap-4 text-left cursor-pointer"
         data-testid={`button-expand-detection-${detection.id}`}
       >
-        <div className="flex min-w-0 gap-3.5">
-          <span
-            className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg ${riskTheme.typeBadge}`}
-          >
-            {isAudio ? <Volume2 size={16} /> : isVideo ? <Film size={16} /> : <ImageIcon size={16} />}
-          </span>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className={`text-base ${riskTheme.title}`}>{detection.name}</h3>
-              <span className={`font-mono text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-sm font-semibold ${riskTheme.categoryBadge}`}>
-                {categoryLabel(detection.category)}
-              </span>
-            </div>
-            <p className={`mt-0.5 text-xs font-mono ${riskTheme.subtitle}`}>
-              {detection.sourceRef} · {Math.round(detection.confidence * 100)}% confidence
-            </p>
-          </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-foreground">
+            <span className={riskColor}>{detection.name}</span>
+            <span className="text-muted-foreground font-normal"> ({categoryLabel(detection.category)})</span>
+          </h3>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <RiskBadge level={detection.riskLevel} />
-          <ChevronDown
-            size={16}
-            className={`opacity-80 transition-transform ${expanded ? 'rotate-180' : ''}`}
-          />
-        </div>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {expanded && (
-        <div className={`mt-5 pt-4 border-t ${riskTheme.borderDivider} grid gap-5 sm:grid-cols-[1.1fr_1fr] fade-up`}>
+        <div className="mt-4 grid gap-5 sm:grid-cols-[1.1fr_1fr] fade-up">
           <div>
             <EvidencePreview detection={detection} preview={preview} index={index} />
-            <p className={`font-mono text-[9px] uppercase tracking-wider ${riskTheme.kicker}`}>Context Snippet</p>
-            <p className={`mt-1.5 text-xs leading-relaxed italic p-3 rounded-md ${riskTheme.snippetBox}`}>
-              &ldquo;{detection.contextSnippet}&rdquo;
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-mono">
-              {detection.prominence && <span className={`px-2 py-0.5 rounded ${riskTheme.metaBadge}`}>Prominence: {detection.prominence}</span>}
-              {detection.duration && <span className={`px-2 py-0.5 rounded ${riskTheme.metaBadge}`}>Duration: {detection.duration}</span>}
-              {detection.sentiment && <span className={`px-2 py-0.5 rounded ${riskTheme.metaBadge}`}>Sentiment: {detection.sentiment}</span>}
-              {detection.narrativeRole && <span className={`px-2 py-0.5 rounded ${riskTheme.metaBadge}`}>Role: {detection.narrativeRole}</span>}
-            </div>
+            {detection.contextSnippet && (
+              <>
+                <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground font-bold mb-1">Context Snippet</p>
+                <p className="text-xs leading-relaxed italic p-3 rounded-md bg-muted/40 border border-border text-foreground mb-3">
+                  &ldquo;{detection.contextSnippet}&rdquo;
+                </p>
+              </>
+            )}
+
+            {/* Attributes table */}
+            {(detection.prominence || detection.duration || detection.sentiment || detection.narrativeRole) && (
+              <table className="w-full text-xs border-collapse">
+                <tbody>
+                  {detection.prominence && (
+                    <tr className="border-b border-border/30">
+                      <td className="py-1 pr-4 font-mono text-[10px] uppercase tracking-wider text-muted-foreground font-semibold w-28">Prominence</td>
+                      <td className="py-1 text-foreground capitalize">{detection.prominence}</td>
+                    </tr>
+                  )}
+                  {detection.duration && (
+                    <tr className="border-b border-border/30">
+                      <td className="py-1 pr-4 font-mono text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Duration</td>
+                      <td className="py-1 text-foreground capitalize">{detection.duration}</td>
+                    </tr>
+                  )}
+                  {detection.sentiment && (
+                    <tr className="border-b border-border/30">
+                      <td className="py-1 pr-4 font-mono text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Sentiment</td>
+                      <td className="py-1 text-foreground capitalize">{detection.sentiment}</td>
+                    </tr>
+                  )}
+                  {detection.narrativeRole && (
+                    <tr>
+                      <td className="py-1 pr-4 font-mono text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Role</td>
+                      <td className="py-1 text-foreground capitalize">{detection.narrativeRole}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
           <div>
-            <p className={`font-mono text-[9px] uppercase tracking-wider ${riskTheme.kicker}`}>Legal Clearance Rationale</p>
-            <p className={`mt-1.5 text-xs leading-relaxed ${riskTheme.detailText}`}>
+            <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground font-bold mb-1">Legal Clearance Rationale</p>
+            <p className="text-xs leading-relaxed text-foreground/90">
               {detection.rationale}
             </p>
             {detection.visualEvidence && (
-              <div className="mt-3 text-xs opacity-85">
+              <div className="mt-3 text-xs text-foreground/80">
                 <span className="font-semibold">Visual Evidence:</span> {detection.visualEvidence}
               </div>
             )}
+            <div className="mt-3">
+              <RiskBadge level={detection.riskLevel} />
+            </div>
           </div>
         </div>
       )}
