@@ -34,24 +34,37 @@ function escapeStr(s: string): string {
 function parseBoundingBox(raw: unknown) {
   if (!raw) return null;
   try {
-    const bb = String(raw).trim();
-    if (bb && (bb.startsWith("{") || bb.startsWith("["))) {
-      const parsed = JSON.parse(bb);
-      if (Array.isArray(parsed) && parsed.length === 4) {
-        return {
-          top: Number(parsed[0]),
-          left: Number(parsed[1]),
-          bottom: Number(parsed[2]),
-          right: Number(parsed[3]),
-        };
-      } else if (parsed && typeof parsed === "object") {
-        return {
-          left: Number((parsed as any).left ?? (parsed as any).xmin ?? 0),
-          top: Number((parsed as any).top ?? (parsed as any).ymin ?? 0),
-          right: Number((parsed as any).right ?? (parsed as any).xmax ?? 1000),
-          bottom: Number((parsed as any).bottom ?? (parsed as any).ymax ?? 1000),
-        };
+    let val: any = raw;
+    if (typeof val === "string") {
+      val = val.trim();
+      if (!val) return null;
+      if (val.startsWith("{") || val.startsWith("[")) {
+        val = JSON.parse(val);
       }
+    }
+    // Unwrap nested arrays e.g. [[ymin, xmin, ymax, xmax]]
+    while (Array.isArray(val) && val.length === 1 && Array.isArray(val[0])) {
+      val = val[0];
+    }
+    if (Array.isArray(val) && val.length === 4) {
+      const nums = val.map(Number);
+      return {
+        top: Math.min(nums[0], nums[2]),
+        left: Math.min(nums[1], nums[3]),
+        bottom: Math.max(nums[0], nums[2]),
+        right: Math.max(nums[1], nums[3]),
+      };
+    } else if (val && typeof val === "object") {
+      const top = Number(val.top ?? val.ymin ?? val.y ?? 0);
+      const left = Number(val.left ?? val.xmin ?? val.x ?? 0);
+      const bottom = Number(val.bottom ?? val.ymax ?? (top + (val.height ?? 0)));
+      const right = Number(val.right ?? val.xmax ?? (left + (val.width ?? 0)));
+      return {
+        top: Math.min(top, bottom),
+        left: Math.min(left, right),
+        bottom: Math.max(top, bottom),
+        right: Math.max(left, right),
+      };
     }
   } catch {
     /* ignore */

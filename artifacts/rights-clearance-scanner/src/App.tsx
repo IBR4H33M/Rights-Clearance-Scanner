@@ -1942,101 +1942,81 @@ function parseTimestampFromDetection(
 }
 
 function computeBoundingBoxStyle(
-  box: BoundingBox | null | undefined,
-  detectionName: string,
-  prominence?: string | null
-): React.CSSProperties {
-  if (box) {
-    const top = Number(box.top);
-    const left = Number(box.left);
-    const right = Number(box.right);
-    const bottom = Number(box.bottom);
+  box: BoundingBox | null | undefined
+): React.CSSProperties | null {
+  if (!box) return null;
+  const top = Number(box.top);
+  const left = Number(box.left);
+  const bottom = Number(box.bottom);
+  const right = Number(box.right);
 
-    // 0-1000 normalized scale (Gemini box_2d coordinate format)
-    if (right <= 1000 && bottom <= 1000 && (right > 1 || bottom > 1) && right > left && bottom > top) {
-      const widthPct = Math.max(10, ((right - left) / 1000) * 100);
-      const heightPct = Math.max(8, ((bottom - top) / 1000) * 100);
-      const leftPct = Math.min(100 - widthPct, Math.max(0, (left / 1000) * 100));
-      const topPct = Math.min(100 - heightPct, Math.max(0, (top / 1000) * 100));
-      return {
-        left: `${leftPct.toFixed(2)}%`,
-        top: `${topPct.toFixed(2)}%`,
-        width: `${widthPct.toFixed(2)}%`,
-        height: `${heightPct.toFixed(2)}%`,
-      };
-    }
+  if (isNaN(top) || isNaN(left) || isNaN(bottom) || isNaN(right)) return null;
 
+  const ymin = Math.min(top, bottom);
+  const ymax = Math.max(top, bottom);
+  const xmin = Math.min(left, right);
+  const xmax = Math.max(left, right);
+
+  if (xmax <= xmin || ymax <= ymin) return null;
+
+  let leftPct: number;
+  let topPct: number;
+  let widthPct: number;
+  let heightPct: number;
+
+  if (xmax <= 1 && ymax <= 1) {
     // 0-1 float scale
-    if (right <= 1 && bottom <= 1 && right > left && bottom > top) {
-      const widthPct = Math.max(10, (right - left) * 100);
-      const heightPct = Math.max(8, (bottom - top) * 100);
-      const leftPct = Math.min(100 - widthPct, Math.max(0, left * 100));
-      const topPct = Math.min(100 - heightPct, Math.max(0, top * 100));
-      return {
-        left: `${leftPct.toFixed(2)}%`,
-        top: `${topPct.toFixed(2)}%`,
-        width: `${widthPct.toFixed(2)}%`,
-        height: `${heightPct.toFixed(2)}%`,
-      };
-    }
-
-    // Direct pixel / percentage scale
-    if (right > left && bottom > top) {
-      return {
-        left: `${left}%`,
-        top: `${top}%`,
-        width: `${Math.max(10, right - left)}%`,
-        height: `${Math.max(8, bottom - top)}%`,
-      };
-    }
-  }
-
-  // Fallback: Generate a clean, realistic bounding box for this brand so that every detection has one
-  let hash = 0;
-  for (let i = 0; i < detectionName.length; i++) {
-    hash = (hash << 5) - hash + detectionName.charCodeAt(i);
-    hash |= 0;
-  }
-  const posHash = Math.abs(hash);
-
-  if (prominence === 'featured') {
-    return {
-      left: '26%',
-      top: '20%',
-      width: '48%',
-      height: '46%',
-    };
-  } else if (prominence === 'moderate') {
-    const coords = [
-      { left: '22%', top: '28%', width: '34%', height: '32%' },
-      { left: '44%', top: '22%', width: '36%', height: '34%' },
-      { left: '30%', top: '38%', width: '35%', height: '32%' },
-    ];
-    return coords[posHash % coords.length];
+    leftPct = xmin * 100;
+    topPct = ymin * 100;
+    widthPct = (xmax - xmin) * 100;
+    heightPct = (ymax - ymin) * 100;
+  } else if (xmax <= 1000 && ymax <= 1000) {
+    // 0-1000 Gemini normalized scale
+    leftPct = (xmin / 1000) * 100;
+    topPct = (ymin / 1000) * 100;
+    widthPct = ((xmax - xmin) / 1000) * 100;
+    heightPct = ((ymax - ymin) / 1000) * 100;
   } else {
-    // background
-    const coords = [
-      { left: '60%', top: '54%', width: '26%', height: '24%' },
-      { left: '14%', top: '50%', width: '25%', height: '26%' },
-      { left: '64%', top: '18%', width: '24%', height: '25%' },
-      { left: '15%', top: '20%', width: '25%', height: '24%' },
-    ];
-    return coords[posHash % coords.length];
+    // Percentage / pixel scale
+    leftPct = xmin;
+    topPct = ymin;
+    widthPct = xmax - xmin;
+    heightPct = ymax - ymin;
   }
+
+  // Ensure minimum dimensions so box is clearly visible around the logo
+  if (widthPct < 5) {
+    const pad = (5 - widthPct) / 2;
+    leftPct = Math.max(0, leftPct - pad);
+    widthPct = 5;
+  }
+  if (heightPct < 4) {
+    const pad = (4 - heightPct) / 2;
+    topPct = Math.max(0, topPct - pad);
+    heightPct = 4;
+  }
+
+  return {
+    left: `${Math.max(0, Math.min(99, leftPct)).toFixed(2)}%`,
+    top: `${Math.max(0, Math.min(99, topPct)).toFixed(2)}%`,
+    width: `${Math.min(100 - leftPct, Math.max(1, widthPct)).toFixed(2)}%`,
+    height: `${Math.min(100 - topPct, Math.max(1, heightPct)).toFixed(2)}%`,
+  };
 }
 
 function ImageBoundingBox({
   box,
   detectionName,
-  riskLevel,
-  prominence,
 }: {
   box: Detection['boundingBox'];
   detectionName: string;
-  riskLevel: string;
+  riskLevel?: string;
   prominence?: string | null;
 }) {
-  const style = computeBoundingBoxStyle(box, detectionName, prominence);
+  if (!box) return null;
+  const style = computeBoundingBoxStyle(box);
+  if (!style) return null;
+
   return (
     <div
       aria-label={`Bounding box for ${detectionName}`}
@@ -2068,6 +2048,7 @@ function VideoFrameSnippet({
   riskLevel: string;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const isCloudinary = videoUrl.includes('cloudinary.com') && videoUrl.includes('/video/upload/');
@@ -2080,6 +2061,9 @@ function VideoFrameSnippet({
 
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
+      if (videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
+        setAspectRatio(`${videoRef.current.videoWidth} / ${videoRef.current.videoHeight}`);
+      }
       videoRef.current.currentTime = Math.max(0, timestamp);
     }
   };
@@ -2087,12 +2071,21 @@ function VideoFrameSnippet({
   return (
     <div className="mb-4">
       {/* Snippet Photo Frame */}
-      <div className="relative max-w-[440px] aspect-video overflow-hidden rounded-md border border-white/20 bg-black shadow-sm">
+      <div
+        className="relative max-w-[440px] overflow-hidden rounded-md border border-white/20 bg-black shadow-sm flex items-center justify-center"
+        style={{ aspectRatio: aspectRatio || '16 / 9' }}
+      >
         {cloudinaryThumbnailUrl && !imageFailed ? (
           <img
             src={cloudinaryThumbnailUrl}
             alt={`Video snippet frame at timestamp ${timeStr}`}
             className="block h-full w-full object-contain"
+            onLoad={(e) => {
+              const img = e.currentTarget;
+              if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                setAspectRatio(`${img.naturalWidth} / ${img.naturalHeight}`);
+              }
+            }}
             onError={() => setImageFailed(true)}
           />
         ) : (
@@ -2111,8 +2104,6 @@ function VideoFrameSnippet({
         <ImageBoundingBox
           box={detection.boundingBox}
           detectionName={detection.name}
-          riskLevel={riskLevel}
-          prominence={detection.prominence}
         />
       </div>
 

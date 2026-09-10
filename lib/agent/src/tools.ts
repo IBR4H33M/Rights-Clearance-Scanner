@@ -81,6 +81,7 @@ export async function detectVisualLogos(args: {
     confidence: number;
     box_2d: number[] | null;
     prominence: string;
+    timestamp?: string;
   }>;
 }> {
   const ai = getAI();
@@ -91,17 +92,29 @@ export async function detectVisualLogos(args: {
         role: "user",
         parts: [
           {
-            text: `You are a visual rights-clearance detection agent. Inspect this media and identify visible third-party brand names, logos, and trademarked products. Ignore unbranded objects.
+            text: `You are an expert visual rights-clearance detection agent. Inspect this media and identify visible third-party brand names, logos, vehicle emblems, and trademarked products. Ignore unbranded objects.
 
-Return a JSON array. Each object must have:
-{
-  "label": "brand or logo name",
-  "confidence": 0.0-1.0,
-  "box_2d": [ymin, xmin, ymax, xmax] or null,
-  "prominence": "background" | "moderate" | "featured",
-  "timestamp": "MM:SS timestamp of first appearance in video, or 00:00 for still images"
-}
-Coordinates should be integers 0-1000 on a normalized grid. Limit to 25 objects. For videos, report each distinct reference only at its first appearance.`,
+CRITICAL BOUNDING BOX INSTRUCTIONS:
+- For EVERY visible brand, logo, or car emblem, provide the exact 2D bounding box where the logo or brand name appears on screen.
+- "box_2d": [ymin, xmin, ymax, xmax] as normalized integers from 0 to 1000.
+  - ymin: top coordinate (0 at top, 1000 at bottom)
+  - xmin: left coordinate (0 at left, 1000 at right)
+  - ymax: bottom coordinate
+  - xmax: right coordinate
+- For videos, provide the exact "timestamp": "MM:SS" of when this logo is clearly visible and localized by this box_2d.
+- If a brand is only inferred without a visible logo on screen, set "box_2d": null.
+
+Return a JSON array of objects:
+[
+  {
+    "label": "brand or logo name",
+    "confidence": 0.0-1.0,
+    "box_2d": [ymin, xmin, ymax, xmax] or null,
+    "prominence": "background" | "moderate" | "featured",
+    "timestamp": "MM:SS"
+  }
+]
+Limit to 25 objects.`,
           },
           {
             inlineData: {
@@ -115,14 +128,25 @@ Coordinates should be integers 0-1000 on a normalized grid. Limit to 25 objects.
     config: { responseMimeType: "application/json" },
   });
 
-  const detections = parseJsonResponse<
-    Array<{
-      label: string;
-      confidence: number;
-      box_2d: number[] | null;
-      prominence: string;
-    }>
-  >(response.text ?? "[]", []);
+  const rawDetections = parseJsonResponse<any[]>(response.text ?? "[]", []);
+  const detections = (Array.isArray(rawDetections) ? rawDetections : []).map((d) => {
+    let box: number[] | null = null;
+    let b = d.box_2d ?? d.boundingBox ?? d.bbox;
+    while (Array.isArray(b) && b.length === 1 && Array.isArray(b[0])) {
+      b = b[0];
+    }
+    if (Array.isArray(b) && b.length === 4) {
+      box = b.map(Number);
+    }
+    return {
+      label: String(d.label || d.name || "").trim(),
+      confidence: Number(d.confidence ?? 0.9),
+      box_2d: box,
+      prominence: String(d.prominence || "moderate").toLowerCase(),
+      timestamp: typeof d.timestamp === "string" ? d.timestamp.trim() : undefined,
+    };
+  }).filter((d) => d.label.length > 0);
+
   return { detections };
 }
 

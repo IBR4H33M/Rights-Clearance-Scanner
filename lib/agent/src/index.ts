@@ -47,6 +47,14 @@ export function createClearanceTools(
   deps: StoreDeps,
   currentAsset?: { id: string; projectId: string; filename: string }
 ) {
+  const visualDetectionsCache = new Map<string, {
+    label: string;
+    confidence: number;
+    box_2d: number[] | null;
+    prominence: string;
+    timestamp?: string;
+  }>();
+
   const extractScriptTool = new FunctionTool({
     name: "extract_script_entities",
     description:
@@ -74,6 +82,9 @@ export function createClearanceTools(
         image_base64: base64,
         mime_type: mimeType,
       });
+      for (const d of result.detections) {
+        visualDetectionsCache.set(d.label.toLowerCase().trim(), d);
+      }
       logToolCall("detect_visual_logos", { asset_url: args.asset_url }, `Found ${result.detections.length} visual detections`);
       return result;
     },
@@ -121,22 +132,30 @@ export function createClearanceTools(
       logToolCall("score_risk", { entity_name: args.entity_name, category: args.category }, `Risk: ${result.risk_level}`);
       if (currentAsset) {
         try {
+          const visualMatch = visualDetectionsCache.get(args.entity_name.toLowerCase().trim());
+          const boundingBoxStr = visualMatch?.box_2d ? JSON.stringify(visualMatch.box_2d) : "";
+          const timestampStr = visualMatch?.timestamp;
+          const finalSourceRef = timestampStr
+            ? `${currentAsset.filename} (${timestampStr})`
+            : currentAsset.filename;
+
           await deps.storeDetection({
             asset_id: currentAsset.id,
             project_id: currentAsset.projectId,
             category: args.category,
             name: args.entity_name,
             source_type: args.source_type,
-            source_ref: currentAsset.filename,
+            source_ref: finalSourceRef,
             context_snippet: args.context,
-            confidence: 0.9,
+            confidence: visualMatch?.confidence ?? 0.9,
             risk_level: result.risk_level,
             rationale: result.rationale,
-            prominence: args.prominence,
+            bounding_box: boundingBoxStr,
+            prominence: visualMatch?.prominence ?? args.prominence,
             duration: "brief",
             sentiment: "neutral",
             narrative_role: "incidental",
-            visual_evidence: `Brand marker detected in ${currentAsset.filename}`,
+            visual_evidence: `Brand marker detected in ${currentAsset.filename}${timestampStr ? ` at ${timestampStr}` : ""}`,
           });
         } catch (storeErr) {
           console.warn("[Agent] Auto-store in score_risk caught:", storeErr);
@@ -177,8 +196,8 @@ export function createClearanceTools(
     description:
       "Store a finalized detection in the database. Call this after you have completed extraction and risk scoring for each entity you want to include in the report.",
     parameters: z.object({
-      asset_id: z.string().describe("The asset ID this detection belongs to"),
-      project_id: z.string().describe("The project ID"),
+      asset_id: z.string().optional().describe("The asset ID this detection belongs to"),
+      project_id: z.string().optional().describe("The project ID"),
       category: z.string().describe("brand | logo | celebrity_name | song | existing_ip"),
       name: z.string().describe("The entity name"),
       source_type: z.string().describe("script | visual | audio"),
@@ -195,7 +214,20 @@ export function createClearanceTools(
       visual_evidence: z.string().optional().describe("Description of visual evidence"),
     }),
     execute: async (args) => {
-      await deps.storeDetection(args);
+      const visualMatch = visualDetectionsCache.get(args.name.toLowerCase().trim());
+      if (visualMatch?.box_2d && (!args.bounding_box || args.bounding_box.trim() === "")) {
+        args.bounding_box = JSON.stringify(visualMatch.box_2d);
+      }
+      if (visualMatch?.timestamp && (!args.source_ref || !args.source_ref.includes(visualMatch.timestamp))) {
+        args.source_ref = `${args.source_ref || currentAsset?.filename || "video"} (${visualMatch.timestamp})`;
+      }
+      if (!args.asset_id && currentAsset?.id) {
+        args.asset_id = currentAsset.id;
+      }
+      if (!args.project_id && currentAsset?.projectId) {
+        args.project_id = currentAsset.projectId;
+      }
+      await deps.storeDetection(args as any);
       logToolCall("store_detection", { name: args.name, risk_level: args.risk_level }, "Stored");
       return { status: "stored", name: args.name };
     },
