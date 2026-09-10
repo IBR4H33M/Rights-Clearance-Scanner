@@ -164,11 +164,6 @@ function SidebarProjectPicker({
           <span className="block truncate text-xs font-semibold text-sidebar-foreground">
             {selected ? selected.title : 'Select a Project'}
           </span>
-          {selected && (
-            <span className="font-mono text-[9px] uppercase tracking-wider text-sidebar-foreground/60">
-              {selected.assetCount} assets · {selected.detectionCount} flags
-            </span>
-          )}
         </div>
         <ChevronDown
           size={14}
@@ -197,10 +192,7 @@ function SidebarProjectPicker({
                   }`}
                   data-testid={`button-project-${project.id}`}
                 >
-                  <span className="truncate mr-2">{project.title}</span>
-                  <span className="shrink-0 font-mono text-[9px] opacity-70">
-                    {project.assetCount} assets
-                  </span>
+                  <span className="truncate">{project.title}</span>
                 </button>
               ))
             )}
@@ -1411,15 +1403,9 @@ function Home({
                 </div>
 
                 {selectedProject && (
-                  <div className="flex items-center gap-2 self-start sm:self-center">
-                    <div className="rounded border border-border bg-muted/40 px-3 py-1.5 text-center">
-                      <span className="block font-mono text-[9px] uppercase text-muted-foreground">Assets</span>
-                      <span className="font-bold text-sm">{selectedProject.assetCount}</span>
-                    </div>
-                    <div className="rounded border border-border bg-muted/40 px-3 py-1.5 text-center">
-                      <span className="block font-mono text-[9px] uppercase text-muted-foreground">Findings</span>
-                      <span className="font-bold text-sm">{selectedProject.detectionCount}</span>
-                    </div>
+                  <div className="flex flex-col sm:items-end text-sm text-foreground space-y-0.5 shrink-0 self-start sm:self-center font-medium">
+                    <span>Assets: {selectedProject.assetCount}</span>
+                    <span>Findings: {selectedProject.detectionCount}</span>
                   </div>
                 )}
               </div>
