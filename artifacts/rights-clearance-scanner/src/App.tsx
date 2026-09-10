@@ -1825,17 +1825,17 @@ function ReportPage() {
               <div className="mt-3 flex flex-wrap gap-4">
                 {reportQuery.data.counts.high > 0 && (
                   <p className="text-sm font-semibold text-red-700" data-testid="report-stat-high">
-                    {reportQuery.data.counts.high} {reportQuery.data.counts.high === 1 ? 'high risk reference' : 'high risk references'}
+                    {reportQuery.data.counts.high} {reportQuery.data.counts.high === 1 ? 'high risk reference.' : 'high risk references.'}
                   </p>
                 )}
                 {reportQuery.data.counts.medium > 0 && (
-                  <p className="text-sm font-semibold text-amber-700" data-testid="report-stat-medium">
-                    {reportQuery.data.counts.medium} {reportQuery.data.counts.medium === 1 ? 'medium risk reference' : 'medium risk references'}
+                  <p className="text-sm font-semibold text-orange-600" data-testid="report-stat-medium">
+                    {reportQuery.data.counts.medium} {reportQuery.data.counts.medium === 1 ? 'Medium risk reference.' : 'Medium risk references.'}
                   </p>
                 )}
                 {reportQuery.data.counts.low > 0 && (
-                  <p className="text-sm font-semibold text-emerald-700" data-testid="report-stat-low">
-                    {reportQuery.data.counts.low} {reportQuery.data.counts.low === 1 ? 'low risk reference' : 'low risk references'}
+                  <p className="text-sm font-semibold text-[#a16207]" data-testid="report-stat-low">
+                    {reportQuery.data.counts.low} {reportQuery.data.counts.low === 1 ? 'Low risk reference.' : 'Low risk references.'}
                   </p>
                 )}
               </div>
@@ -2099,11 +2099,6 @@ function VideoFrameSnippet({
 
   return (
     <div className="mb-4">
-      <p className="font-mono text-[10px] uppercase tracking-wider opacity-70 font-semibold flex items-center gap-1.5 mb-1.5">
-        <Film size={12} />
-        <span>Video Frame Snippet Preview</span>
-      </p>
-
       {/* Snippet Photo Frame */}
       <div className="relative max-w-[440px] aspect-video overflow-hidden rounded-md border border-white/20 bg-black shadow-sm">
         {cloudinaryThumbnailUrl && !imageFailed ? (
@@ -2283,15 +2278,30 @@ function DetectionRow({
     detection.category === 'song';
   const isVideo = preview?.type === 'video';
 
-  const riskColor = detection.riskLevel === 'high'
-    ? 'text-red-700'
-    : detection.riskLevel === 'medium'
-    ? 'text-amber-700'
-    : 'text-emerald-700';
+  const riskTitleColor =
+    detection.riskLevel === 'high'
+      ? 'text-red-700'
+      : detection.riskLevel === 'medium'
+      ? 'text-orange-600'
+      : 'text-[#a16207]';
+
+  const riskSolidBg =
+    detection.riskLevel === 'high'
+      ? 'bg-[#dc2626]'
+      : detection.riskLevel === 'medium'
+      ? 'bg-[#ea580c]'
+      : 'bg-[#ca8a04]';
+
+  const riskLabel =
+    detection.riskLevel === 'high'
+      ? 'High'
+      : detection.riskLevel === 'medium'
+      ? 'Medium'
+      : 'Low';
 
   return (
     <article
-      className="py-4 border-b border-border/40 last:border-0"
+      className="py-4 border-b-2 border-border/80 last:border-0"
       data-testid={`row-detection-${detection.id}`}
     >
       <button
@@ -2302,14 +2312,21 @@ function DetectionRow({
       >
         <div className="min-w-0">
           <h3 className="text-sm font-bold text-foreground">
-            <span className={riskColor}>{detection.name}</span>
+            <span className={riskTitleColor}>{detection.name}</span>
             <span className="text-muted-foreground font-normal"> ({categoryLabel(detection.category)})</span>
           </h3>
         </div>
-        <ChevronDown
-          size={16}
-          className={`shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`}
-        />
+        <div className="flex items-center gap-3 shrink-0">
+          <div
+            className={`w-36 h-7 flex items-center justify-center text-center text-xs font-semibold text-white tracking-wide shadow-sm ${riskSolidBg}`}
+          >
+            Risk level : {riskLabel}
+          </div>
+          <ChevronDown
+            size={16}
+            className={`shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`}
+          />
+        </div>
       </button>
 
       {expanded && (
@@ -2318,7 +2335,7 @@ function DetectionRow({
             <EvidencePreview detection={detection} preview={preview} index={index} />
             {detection.contextSnippet && (
               <>
-                <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground font-bold mb-1">Context Snippet</p>
+                <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground font-bold mb-1">Context</p>
                 <p className="text-xs leading-relaxed italic p-3 rounded-md bg-muted/40 border border-border text-foreground mb-3">
                   &ldquo;{detection.contextSnippet}&rdquo;
                 </p>
@@ -2358,18 +2375,10 @@ function DetectionRow({
             )}
           </div>
           <div>
-            <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground font-bold mb-1">Legal Clearance Rationale</p>
+            <h4 className="text-sm font-bold text-foreground mb-1.5 tracking-tight">Legal Clearance Rationale</h4>
             <p className="text-xs leading-relaxed text-foreground/90">
               {detection.rationale}
             </p>
-            {detection.visualEvidence && (
-              <div className="mt-3 text-xs text-foreground/80">
-                <span className="font-semibold">Visual Evidence:</span> {detection.visualEvidence}
-              </div>
-            )}
-            <div className="mt-3">
-              <RiskBadge level={detection.riskLevel} />
-            </div>
           </div>
         </div>
       )}
