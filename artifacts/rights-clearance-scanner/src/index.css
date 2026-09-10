@@ -15,6 +15,18 @@
   font-family: 'Vonique 92', sans-serif;
 }
 
+@font-face {
+  font-family: 'Montserrat';
+  src: url('/Montserrat-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-montserrat {
+  font-family: 'Montserrat', sans-serif;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -127,14 +139,14 @@
   .font-mono { font-family: var(--app-font-mono); }
   .retro-kicker {
     color: hsl(var(--accent-foreground));
-    font-family: 'Bodoni Moda', Georgia, serif;
+    font-family: 'Montserrat', sans-serif;
     font-size: .8rem;
     font-weight: 600;
     letter-spacing: .1em;
     line-height: 1.2;
   }
   .cinema-title {
-    font-family: 'Bodoni Moda', Georgia, serif;
+    font-family: 'Montserrat', sans-serif;
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }

@@ -150,7 +150,7 @@ function SidebarProjectPicker({
 
   return (
     <div className="relative my-4 space-y-2">
-      <div className="text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/60 px-1">
+      <div className="text-[10px] font-montserrat uppercase tracking-widest text-sidebar-foreground/60 px-1">
         <span>Active Project</span>
       </div>
 
@@ -782,7 +782,7 @@ function ProjectReportsSection({
     <div className="mt-10 pt-8 border-t border-border/80">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight">Reports</h2>
+          <h2 className="text-xl font-bold tracking-tight font-montserrat">Reports</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             Full clearance audit history recorded in ClickHouse for this production
           </p>
@@ -1329,12 +1329,9 @@ function Home({
               {/* Project Workspace Slate Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border">
                 <div className="min-w-0 flex-1">
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-accent-foreground font-semibold">
-                    PRODUCTION WORKSPACE
-                  </span>
                   {!isEditingTitle ? (
                     <div className="flex items-center gap-2.5 mt-1">
-                      <h2 className="text-2xl font-bold tracking-tight text-foreground truncate">
+                      <h2 className="text-2xl font-bold tracking-tight text-foreground truncate font-montserrat">
                         {selectedProject ? selectedProject.title : 'Select or Create a Project to Start'}
                       </h2>
                       {selectedProject && (
@@ -1414,7 +1411,7 @@ function Home({
                 {/* Upload Section */}
                 <div className="mt-6">
                   <div className="mb-3">
-                    <h3 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground font-mono">
+                    <h3 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground font-montserrat">
                       Upload Assets
                     </h3>
                     <div className="mt-1">
@@ -1512,7 +1509,7 @@ function Home({
                 <div className="mt-8 pt-6 border-t border-border/80">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                      <h3 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground font-mono">
+                      <h3 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground font-montserrat">
                         Clearance inspection
                       </h3>
                       <p className="text-xs text-muted-foreground mt-0.5">
@@ -1599,7 +1596,7 @@ function Home({
                 <div className="mt-12 pt-6 border-t border-destructive/20 bg-destructive/[0.02] rounded-lg p-5 border border-dashed">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                      <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-destructive">
+                      <h4 className="text-xs font-montserrat uppercase tracking-wider font-bold text-destructive">
                         Delete Production Project
                       </h4>
                       <p className="text-xs text-muted-foreground mt-0.5">
