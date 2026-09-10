@@ -345,7 +345,6 @@ function Shell({
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-xs font-medium text-sidebar-foreground">{user.username}</p>
-                  <p className="font-mono text-[9px] text-sidebar-foreground/50">{user.maxFileSizeLabel} upload max</p>
                 </div>
               </div>
               <button
@@ -1422,13 +1421,15 @@ function Home({
               <>
                 {/* Upload Section */}
                 <div className="mt-6">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="mb-3">
                     <h3 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground font-mono">
                       Upload Assets
                     </h3>
-                    <span className="font-mono text-[10px] text-accent-foreground font-semibold bg-accent/15 px-2 py-0.5 rounded border border-accent/30">
-                      Tier Limit: {limitLabel} per file
-                    </span>
+                    <div className="mt-1">
+                      <span className="font-mono text-[10px] text-accent-foreground font-semibold bg-accent/15 px-2 py-0.5 rounded border border-accent/30">
+                        Tier Limit: {limitLabel} per file
+                      </span>
+                    </div>
                   </div>
 
                   <label
