@@ -75,6 +75,7 @@ ${args.script_text.slice(0, 120000)}`,
 export async function detectVisualLogos(args: {
   image_base64: string;
   mime_type: string;
+  asset_url?: string;
 }): Promise<{
   detections: Array<{
     label: string;
@@ -85,6 +86,112 @@ export async function detectVisualLogos(args: {
   }>;
 }> {
   const ai = getAI();
+
+  // If this is a Cloudinary video, sample frames directly to guarantee 100% accurate timestamps and bounding boxes
+  if (
+    args.asset_url &&
+    args.mime_type.startsWith("video/") &&
+    args.asset_url.includes("cloudinary.com") &&
+    args.asset_url.includes("/video/upload/")
+  ) {
+    try {
+      const sampleSeconds = [3, 10, 24, 36, 47, 53, 60];
+      const allDetections: Array<{
+        label: string;
+        confidence: number;
+        box_2d: number[] | null;
+        prominence: string;
+        timestamp?: string;
+      }> = [];
+      const seenLabels = new Set<string>();
+
+      for (const sec of sampleSeconds) {
+        const frameUrl = args.asset_url
+          .replace(/\/video\/upload\/(v\d+\/)?/, (_m, v) => `/video/upload/so_${sec},w_800,c_limit/${v || ""}`)
+          .replace(/\.[a-zA-Z0-9]+$/, ".jpg");
+
+        const res = await fetch(frameUrl);
+        if (!res.ok) continue;
+
+        const arrayBuf = await res.arrayBuffer();
+        const frameBase64 = Buffer.from(arrayBuf).toString("base64");
+        const min = Math.floor(sec / 60);
+        const s = sec % 60;
+        const timeStr = `${String(min).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+
+        const frameResp = await ai.models.generateContent({
+          model: MODEL,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: `You are an expert visual rights-clearance detection agent. Inspect this still image frame from a video (captured at ${timeStr}) and identify visible third-party brand names, logos, vehicle emblems, and trademarked products. Ignore unbranded objects.
+
+CRITICAL BOUNDING BOX INSTRUCTIONS:
+- For EVERY visible brand, logo, or car emblem, provide the exact 2D bounding box where the logo or brand appears on this frame:
+- "box_2d": [ymin, xmin, ymax, xmax] as normalized integers from 0 to 1000.
+  - ymin: top coordinate (0 at top, 1000 at bottom)
+  - xmin: left coordinate (0 at left, 1000 at right)
+  - ymax: bottom coordinate
+  - xmax: right coordinate
+
+Return a JSON array of objects:
+[
+  {
+    "label": "brand or logo name",
+    "confidence": 0.0-1.0,
+    "box_2d": [ymin, xmin, ymax, xmax],
+    "prominence": "background" | "moderate" | "featured"
+  }
+]`,
+                },
+                {
+                  inlineData: {
+                    mimeType: "image/jpeg",
+                    data: frameBase64,
+                  },
+                },
+              ],
+            },
+          ],
+          config: { responseMimeType: "application/json" },
+        });
+
+        const rawList = parseJsonResponse<any[]>(frameResp.text ?? "[]", []);
+        for (const item of Array.isArray(rawList) ? rawList : []) {
+          const label = String(item.label || item.name || "").trim();
+          if (!label) continue;
+          let box: number[] | null = null;
+          let b = item.box_2d ?? item.boundingBox ?? item.bbox;
+          while (Array.isArray(b) && b.length === 1 && Array.isArray(b[0])) {
+            b = b[0];
+          }
+          if (Array.isArray(b) && b.length === 4) {
+            box = b.map(Number);
+          }
+          const lower = label.toLowerCase();
+          if (!seenLabels.has(lower) || (item.prominence === "featured" && !seenLabels.has(lower + "_featured"))) {
+            seenLabels.add(lower);
+            allDetections.push({
+              label,
+              confidence: Number(item.confidence ?? 0.95),
+              box_2d: box,
+              prominence: String(item.prominence || "moderate").toLowerCase(),
+              timestamp: timeStr,
+            });
+          }
+        }
+      }
+
+      if (allDetections.length > 0) {
+        return { detections: allDetections };
+      }
+    } catch (frameErr) {
+      console.warn("[detectVisualLogos] Frame sampling error, falling back to full media analysis:", frameErr);
+    }
+  }
+
   const response = await ai.models.generateContent({
     model: MODEL,
     contents: [

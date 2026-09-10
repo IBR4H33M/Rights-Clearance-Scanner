@@ -2055,7 +2055,7 @@ function VideoFrameSnippet({
   const cloudinaryThumbnailUrl = useMemo(() => {
     if (!isCloudinary) return null;
     return videoUrl
-      .replace(/\/video\/upload\/(?:v\d+\/)?/, (match) => `${match}so_${timestamp},w_800,c_limit/`)
+      .replace(/\/video\/upload\/(v\d+\/)?/, (_match, v) => `/video/upload/so_${timestamp},w_800,c_limit/${v || ''}`)
       .replace(/\.[a-zA-Z0-9]+$/, '.jpg');
   }, [videoUrl, isCloudinary, timestamp]);
 

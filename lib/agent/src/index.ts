@@ -81,6 +81,7 @@ export function createClearanceTools(
       const result = await detectVisualLogos({
         image_base64: base64,
         mime_type: mimeType,
+        asset_url: args.asset_url,
       });
       for (const d of result.detections) {
         visualDetectionsCache.set(d.label.toLowerCase().trim(), d);
@@ -369,6 +370,7 @@ Identify all third-party IP, score the risk for each detection, and store the re
         const visualResult = await detectVisualLogos({
           image_base64: base64,
           mime_type: mimeType,
+          asset_url: asset.cloudinaryUrl,
         });
         logToolCall("detect_visual_logos", { asset_url: asset.cloudinaryUrl }, `Found ${visualResult.detections.length} visual detections`);
 
@@ -388,14 +390,8 @@ Identify all third-party IP, score the risk for each detection, and store the re
           });
           logToolCall("score_risk", { entity_name: det.label, category: "brand" }, `Risk: ${riskResult.risk_level}`);
 
-          // Assign distinct timestamp for video appearances if not specified
+          // Use real detected timestamp from frame analysis if available
           let appearanceTimestamp = (det as any).timestamp;
-          if ((!appearanceTimestamp || appearanceTimestamp === "00:00") && asset.type === "video") {
-            const staggerSeconds = (detIndex * 4 + 2) % 120;
-            const min = Math.floor(staggerSeconds / 60);
-            const sec = staggerSeconds % 60;
-            appearanceTimestamp = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-          }
 
           await deps.storeDetection({
             asset_id: asset.id,
