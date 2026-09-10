@@ -27,18 +27,21 @@ export async function connectClickHouse(): Promise<Client> {
     CLICKHOUSE_ALLOW_DROP: "true",
   };
 
-  // Determine which command to use for running mcp-clickhouse
-  // Try uvx first (fast, no install), fall back to python -m
+  // Determine which command to use for running mcp-clickhouse.
+  // In Docker (Render), mcp-clickhouse is installed via pip into /opt/venv/bin.
+  // On local dev (macOS/Linux) uvx is preferred; Windows uses cmd /c uvx.
   const isWindows = process.platform === "win32";
   let command: string;
   let args: string[];
 
   if (isWindows) {
     command = "cmd.exe";
-    args = ["/c", "uvx", "mcp-clickhouse"];
+    args = ["/c", "mcp-clickhouse"];
   } else {
-    command = "uvx";
-    args = ["mcp-clickhouse"];
+    // Use the direct binary — works in Docker (venv on PATH) and locally
+    // when mcp-clickhouse is pip-installed or uvx-installed.
+    command = "mcp-clickhouse";
+    args = [];
   }
 
   transport = new StdioClientTransport({
