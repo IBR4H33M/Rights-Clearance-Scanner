@@ -3,6 +3,18 @@
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 
+@font-face {
+  font-family: 'Vonique 92';
+  src: url('/Vonique 92 Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-vonique {
+  font-family: 'Vonique 92', sans-serif;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

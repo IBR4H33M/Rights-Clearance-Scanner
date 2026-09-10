@@ -277,7 +277,7 @@ function Shell({
                 alt="RightScan"
                 className="w-6 h-6 object-contain rounded shrink-0"
               />
-              <span className="text-xl font-black tracking-tight text-sidebar-foreground group-hover:text-sidebar-primary transition-colors cinema-title">
+              <span className="text-2xl font-normal tracking-wide text-sidebar-foreground group-hover:text-sidebar-primary transition-colors font-vonique">
                 RightScan
               </span>
             </Link>
@@ -1476,7 +1476,6 @@ function Home({
                   {/* Asset Previews */}
                   {selectedProject.assets.filter((a) => a.type === 'image' || a.type === 'video').length > 0 && (
                     <div className="mt-6 pt-5 border-t border-border/60">
-                      <p className="retro-kicker text-muted-foreground mb-3">Ingested Footage & Imagery</p>
                       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
                         {selectedProject.assets
                           .filter((asset) => asset.type === 'image' || asset.type === 'video')
