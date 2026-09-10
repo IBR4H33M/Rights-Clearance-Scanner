@@ -822,38 +822,39 @@ function ProjectReportsSection({
               data-testid={`report-card-${r.id}`}
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[10px] uppercase font-bold text-muted-foreground">
                     #{reports.length - idx}
                   </span>
                   <h3 className="font-semibold text-sm text-foreground truncate">{r.name}</h3>
+                  <span className="text-[11px] text-muted-foreground">
+                    · {formatDate(r.generatedAt)} · {r.analyzedAssets} asset{r.analyzedAssets === 1 ? '' : 's'}
+                  </span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{r.summary}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                  <span>{formatDate(r.generatedAt)}</span>
-                  <span>·</span>
-                  <span>{r.analyzedAssets} assets</span>
-                  <span>·</span>
-                  <div className="flex items-center gap-1.5">
-                    {r.counts.high > 0 && (
-                      <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-bold">
-                        {r.counts.high} High
-                      </span>
-                    )}
-                    {r.counts.medium > 0 && (
-                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold">
-                        {r.counts.medium} Med
-                      </span>
-                    )}
-                    {r.counts.low > 0 && (
-                      <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 font-bold">
-                        {r.counts.low} Low
-                      </span>
-                    )}
-                    {r.counts.high === 0 && r.counts.medium === 0 && r.counts.low === 0 && (
-                      <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Clean</span>
-                    )}
-                  </div>
+                <p className="mt-1 text-xs text-muted-foreground">{r.summary}</p>
+                <div className="mt-2.5">
+                  <table className="text-xs border border-border/60 rounded overflow-hidden">
+                    <thead>
+                      <tr className="bg-muted/40 border-b border-border/60 text-[11px] text-muted-foreground">
+                        <th className="px-3 py-1 font-medium text-left border-r border-border/40">High Risk</th>
+                        <th className="px-3 py-1 font-medium text-left border-r border-border/40">Medium Risk</th>
+                        <th className="px-3 py-1 font-medium text-left">Low Risk</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="bg-card/30">
+                        <td className="px-3 py-1 font-bold border-r border-border/40" style={{ color: '#dc2626' }}>
+                          {r.counts.high}
+                        </td>
+                        <td className="px-3 py-1 font-bold border-r border-border/40" style={{ color: '#ea580c' }}>
+                          {r.counts.medium}
+                        </td>
+                        <td className="px-3 py-1 font-bold" style={{ color: '#ca8a04' }}>
+                          {r.counts.low}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
