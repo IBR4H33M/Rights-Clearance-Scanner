@@ -2749,6 +2749,114 @@ function ErrorScreen({
   );
 }
 
+// ─── Reports Overview / Directory Page (/reports) ───────────────────────────
+
+function ReportsDirectoryPage({
+  projects,
+  selectedId,
+  onSelectProject,
+}: {
+  projects: Project[];
+  selectedId?: string;
+  onSelectProject: (id: string) => void;
+}) {
+  const [, setLocation] = useLocation();
+  const selectedProject = projects.find((p) => p.id === selectedId);
+
+  return (
+    <div className="min-h-[100dvh]">
+      <header className="px-5 py-7 sm:px-8 sm:py-9 lg:px-12 border-b border-border/80 bg-card/40">
+        <div className="mx-auto flex max-w-[1380px] flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-montserrat">
+              Clearance Reports
+            </h1>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Full clearance audit history recorded in ClickHouse for your production slates
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLocation('/')}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer self-start sm:self-auto"
+          >
+            <ArrowLeft size={14} />
+            <span>Back to Workspace</span>
+          </button>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-[1380px] px-5 py-8 sm:px-8 lg:px-12">
+        {!selectedProject ? (
+          <div className="rounded-xl border border-dashed border-border bg-card/60 p-8 sm:p-14 text-center">
+            <FolderOpen size={40} className="mx-auto text-muted-foreground/80 mb-3" />
+            <h2 className="text-xl font-bold text-foreground font-montserrat">
+              Please select a project to view reports
+            </h2>
+            <p className="mt-1.5 text-xs text-muted-foreground max-w-md mx-auto">
+              Choose an active production slate from the left sidebar or select one of your projects below to inspect its clearance audit reports.
+            </p>
+
+            {projects.length > 0 ? (
+              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-left max-w-3xl mx-auto">
+                {projects.map((proj) => (
+                  <button
+                    key={proj.id}
+                    type="button"
+                    onClick={() => {
+                      onSelectProject(proj.id);
+                      setLocation(`/report/${proj.id}`);
+                    }}
+                    className="flex flex-col justify-between p-4 rounded-lg border border-border/80 bg-card hover:bg-muted/40 hover:border-accent transition-all cursor-pointer group shadow-sm text-left"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Clapperboard size={15} className="text-primary shrink-0" />
+                        <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                          {proj.title}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1.5">
+                        {proj.assetCount} {proj.assetCount === 1 ? 'asset' : 'assets'} · {proj.detectionCount} {proj.detectionCount === 1 ? 'finding' : 'findings'}
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-2.5 border-t border-border/60 flex items-center justify-between text-[11px]">
+                      <span className={proj.reportStatus === 'ready' ? 'text-emerald-700 font-medium' : 'text-muted-foreground'}>
+                        {proj.reportStatus === 'ready' ? 'Report Ready' : 'Not Started'}
+                      </span>
+                      <span className="text-primary font-semibold group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1">
+                        <span>View</span>
+                        <ArrowUpRight size={12} />
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-6">
+                <Link
+                  href="/"
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/85 transition-colors"
+                >
+                  <span>Create a Project Slate</span>
+                  <ArrowUpRight size={14} />
+                </Link>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <ProjectReportsSection
+              projectId={selectedProject.id}
+              projectTitle={selectedProject.title}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Root App & Router ─────────────────────────────────────────────────────
 
 function AppShellWithState() {
@@ -2784,6 +2892,13 @@ function AppShellWithState() {
             projects={projects}
             selectedId={selectedId}
             setSelectedId={setSelectedId}
+          />
+        </Route>
+        <Route path="/reports">
+          <ReportsDirectoryPage
+            projects={projects}
+            selectedId={selectedId}
+            onSelectProject={(id) => setSelectedId(id)}
           />
         </Route>
         <Route path="/report/:projectId" component={ReportPage} />
