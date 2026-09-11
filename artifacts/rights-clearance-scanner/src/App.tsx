@@ -836,9 +836,8 @@ function ProjectReportsSection({
           Loading reports…
         </div>
       ) : reports.length === 0 ? (
-        <div className="scan-grid mt-4 rounded-md p-8 text-center border border-border/60">
-          <ShieldAlert size={24} className="mx-auto text-muted-foreground" />
-          <p className="mt-2 text-sm font-semibold">No reports generated yet</p>
+        <div className="py-4">
+          <p className="text-sm font-semibold text-foreground">No reports generated yet</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Add source assets above and click &quot;Run analysis&quot; to compile your first clearance audit.
           </p>
