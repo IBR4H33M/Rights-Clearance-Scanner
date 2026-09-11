@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { randomUUID, createHash } from "node:crypto";
 import { queryClickHouse, executeClickHouse } from "@workspace/clickhouse-mcp";
+import { deleteProjectFolder } from "@workspace/cloudinary-storage";
 
 const router: IRouter = Router();
 
@@ -187,4 +188,103 @@ router.get("/auth/me", async (req, res): Promise<void> => {
   }
 });
 
+// ─── Demo User Purge Helper ────────────────────────────────────────────────
+// Deletes all Cloudinary folders and ClickHouse records associated with a demo user
+export async function purgeDemoUser(demoUserId: string): Promise<void> {
+  if (!demoUserId || !demoUserId.startsWith("demo_")) return;
+  console.log(`[Demo Cleanup] Starting teardown for demo session: ${demoUserId}`);
+
+  try {
+    // 1. Find all projects belonging to this demo user
+    const { rows: projectRows } = await queryClickHouse(
+      `SELECT id FROM projects WHERE user_id = '${escapeStr(demoUserId)}'`
+    );
+
+    // 2. Delete Cloudinary media and database records for each demo project
+    for (const p of projectRows) {
+      const projectId = String(p.id);
+      try {
+        console.log(`[Demo Cleanup] Destroying Cloudinary folder for demo project: ${projectId}`);
+        await deleteProjectFolder(projectId);
+      } catch (cloudErr) {
+        console.warn(`[Demo Cleanup] Cloudinary folder removal error for ${projectId}:`, cloudErr);
+      }
+
+      await executeClickHouse(`ALTER TABLE assets DELETE WHERE project_id = '${escapeStr(projectId)}'`);
+      await executeClickHouse(`ALTER TABLE detections DELETE WHERE project_id = '${escapeStr(projectId)}'`);
+      await executeClickHouse(`ALTER TABLE reports DELETE WHERE project_id = '${escapeStr(projectId)}'`);
+      await executeClickHouse(`ALTER TABLE project_stats DELETE WHERE project_id = '${escapeStr(projectId)}'`);
+    }
+
+    // 3. Delete projects
+    await executeClickHouse(`ALTER TABLE projects DELETE WHERE user_id = '${escapeStr(demoUserId)}'`);
+
+    // 4. Delete demo user record
+    await executeClickHouse(`ALTER TABLE users DELETE WHERE id = '${escapeStr(demoUserId)}'`);
+
+    console.log(`[Demo Cleanup] Successfully purged demo user ${demoUserId} and ${projectRows.length} project(s).`);
+  } catch (err) {
+    console.error(`[Demo Cleanup] Error purging demo user ${demoUserId}:`, err);
+  }
+}
+
+// ─── POST /api/auth/demo/cleanup ───────────────────────────────────────────
+// Teardown endpoint invoked on logout or beforeunload
+router.post("/auth/demo/cleanup", async (req, res): Promise<void> => {
+  const queryUserId = typeof req.query.userId === "string" ? req.query.userId : null;
+  const bodyUserId = req.body && typeof req.body.userId === "string" ? req.body.userId : null;
+  const customHeader = typeof req.headers["x-user-id"] === "string" ? req.headers["x-user-id"] : null;
+  const authHeader = req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null;
+
+  let userId = queryUserId || bodyUserId || customHeader || authHeader;
+
+  // Handle sendBeacon string payloads
+  if (!userId && typeof req.body === "string") {
+    try {
+      const parsed = JSON.parse(req.body);
+      if (parsed?.userId) userId = parsed.userId;
+    } catch {}
+  }
+
+  if (!userId || !userId.startsWith("demo_")) {
+    res.status(400).json({ error: "Invalid demo user ID" });
+    return;
+  }
+
+  try {
+    await purgeDemoUser(userId);
+    res.json({ success: true, message: "Demo session cleared completely" });
+  } catch (err) {
+    console.error("Error during demo cleanup:", err);
+    res.status(500).json({ error: "Failed to clean demo session" });
+  }
+});
+
+// ─── Background Demo Sweeper ───────────────────────────────────────────────
+// Cleans up stale demo sessions older than 2 hours in case a tab was closed offline
+async function runDemoSweeper(): Promise<void> {
+  try {
+    const { rows } = await queryClickHouse(
+      `SELECT id FROM users WHERE role = 'demo' AND created_at < now() - INTERVAL 2 HOUR LIMIT 20`
+    );
+    if (rows.length > 0) {
+      console.log(`[Demo Sweeper] Found ${rows.length} expired demo session(s) to purge.`);
+      for (const row of rows) {
+        await purgeDemoUser(String(row.id));
+      }
+    }
+  } catch (err) {
+    console.warn("[Demo Sweeper] Error during background sweep:", err);
+  }
+}
+
+// Initial sweep 30s after startup, then every 30 minutes
+setTimeout(() => {
+  runDemoSweeper().catch(() => {});
+  setInterval(() => {
+    runDemoSweeper().catch(() => {});
+  }, 30 * 60 * 1000);
+}, 30 * 1000);
+
 export default router;
+
