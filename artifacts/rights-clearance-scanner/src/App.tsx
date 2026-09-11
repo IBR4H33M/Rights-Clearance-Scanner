@@ -2354,7 +2354,7 @@ function ReportPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <h2 className="text-xl font-bold tracking-tight text-foreground font-montserrat">
-                      Findings & Evidence: {currentReport.name || `Scan #${allReports.length - allReports.findIndex((r) => r.id === currentReport.id)}`}
+                      Findings & Evidence: {allReports.find((r) => r.id === selectedReportId)?.name || `Scan #${allReports.length - Math.max(0, allReports.findIndex((r) => r.id === selectedReportId))}`}
                     </h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Generated {formatDate(currentReport.generatedAt)} · {currentReport.analyzedAssets} source assets reviewed
@@ -2371,18 +2371,12 @@ function ReportPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        setReportToDelete(
-                          allReports.find((r) => r.id === currentReport.id) || {
-                            id: (currentReport as any).id,
-                            name: currentReport.name || 'Report',
-                            summary: currentReport.summary,
-                            generatedAt: currentReport.generatedAt,
-                            analyzedAssets: currentReport.analyzedAssets,
-                            counts: currentReport.counts,
-                          }
-                        )
-                      }
+                      onClick={() => {
+                        const target = allReports.find((r) => r.id === selectedReportId);
+                        if (target) {
+                          setReportToDelete(target);
+                        }
+                      }}
                       className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors cursor-pointer"
                     >
                       <Trash2 size={13} />
