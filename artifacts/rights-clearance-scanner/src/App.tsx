@@ -1822,8 +1822,8 @@ function ReportPage() {
       <header className="px-5 py-7 sm:px-8 sm:py-9 lg:px-12 border-b border-border/80 bg-card/40">
         <div className="mx-auto flex max-w-[1380px] flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-              {project?.title ?? 'Production Clearance Report'}
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground font-montserrat">
+              {project?.title ? `Reports for ${project.title}` : 'Reports'}
             </h1>
             {reportQuery.data && (
               <p className="mt-1.5 text-xs text-muted-foreground">
@@ -1874,28 +1874,11 @@ function ReportPage() {
         {reportQuery.isLoading ? (
           <LoadingScreen label="Loading clearance audit…" />
         ) : !reportQuery.data ? (
-          <div className="space-y-6">
-            <div className="rounded-xl border border-dashed border-border bg-card/60 p-10 text-center">
-              <FileText size={36} className="mx-auto text-muted-foreground/60 mb-3" />
-              <h3 className="text-base font-bold text-foreground">No reports generated yet</h3>
-              <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
-                Add source assets in the workspace and click "Run clearance Scan" to compile your first clearance audit.
-              </p>
-              <div className="mt-5">
-                <Link
-                  href="/"
-                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/85 transition-colors"
-                >
-                  <span>Open Production Workspace</span>
-                  <ArrowUpRight size={14} />
-                </Link>
-              </div>
-            </div>
-
-            <ProjectReportsSection
-              projectId={projectId ?? ''}
-              projectTitle={project?.title ?? 'Production'}
-            />
+          <div className="py-6">
+            <h3 className="text-base font-bold text-foreground">No reports generated yet</h3>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Add source assets in the workspace and click &quot;Run clearance Scan&quot; to compile your first clearance audit.
+            </p>
           </div>
         ) : (
           <div className="space-y-6">
