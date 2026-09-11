@@ -280,13 +280,13 @@ export async function transcribeAndFlagDialogue(args: {
         role: "user",
         parts: [
           {
-            text: `You are a dialogue rights-clearance agent. Transcribe spoken dialogue in this video and identify any mentions of brand names, celebrity names, song titles, or copyrighted works.
+            text: `You are a dialogue rights-clearance agent. Transcribe spoken dialogue in this audio/video track and identify any mentions of brand names, celebrity names, song titles, or copyrighted works.
 
 Return a JSON array. Each item must have:
 - name: the entity mentioned
 - category: "brand" | "celebrity_name" | "song" | "existing_ip"
-- timestamp: approximate timestamp or "throughout"
-- context_snippet: the surrounding dialogue
+- timestamp: approximate timestamp (e.g. "00:04", "0:15") or "throughout"
+- context_snippet: the EXACT verbatim spoken words/subtitle uttered by the speaker in the audio containing the mention (e.g. "I'm driving the Ferrari to the party"). NEVER provide a summary or meta-description like "Spoken dialogue mentioning Ferrari in the scene", you MUST transcribe the exact subtitle text uttered.
 - confidence: 0.0-1.0
 - sentiment: "positive" | "neutral" | "negative"`,
           },

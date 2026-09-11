@@ -872,13 +872,13 @@ function ProjectReportsSection({
                     </thead>
                     <tbody>
                       <tr className="bg-card/30">
-                        <td className="px-3 py-1 font-bold border-r border-border/40" style={{ color: '#dc2626' }}>
+                        <td className="px-3 py-1 font-bold border-r border-border/40" style={{ color: '#d24624' }}>
                           {r.counts.high}
                         </td>
-                        <td className="px-3 py-1 font-bold border-r border-border/40" style={{ color: '#ea580c' }}>
+                        <td className="px-3 py-1 font-bold border-r border-border/40" style={{ color: '#f8a01a' }}>
                           {r.counts.medium}
                         </td>
-                        <td className="px-3 py-1 font-bold" style={{ color: '#ca8a04' }}>
+                        <td className="px-3 py-1 font-bold" style={{ color: '#70964b' }}>
                           {r.counts.low}
                         </td>
                       </tr>
@@ -1965,17 +1965,6 @@ function Home({
                                   </p>
                                 </div>
                               </div>
-                              <div className="shrink-0 text-[11px] font-mono font-medium ml-3">
-                                {isSelected ? (
-                                  <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
-                                    Selected
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">
-                                    Excluded
-                                  </span>
-                                )}
-                              </div>
                             </label>
                           );
                         })}
@@ -2197,17 +2186,17 @@ function ReportPage() {
               </p>
               <div className="mt-3 flex flex-wrap gap-4">
                 {reportQuery.data.counts.high > 0 && (
-                  <p className="text-sm font-semibold text-red-700" data-testid="report-stat-high">
+                  <p className="text-sm font-semibold text-[#d24624]" data-testid="report-stat-high">
                     {reportQuery.data.counts.high} {reportQuery.data.counts.high === 1 ? 'high risk reference.' : 'high risk references.'}
                   </p>
                 )}
                 {reportQuery.data.counts.medium > 0 && (
-                  <p className="text-sm font-semibold text-orange-600" data-testid="report-stat-medium">
+                  <p className="text-sm font-semibold text-[#f8a01a]" data-testid="report-stat-medium">
                     {reportQuery.data.counts.medium} {reportQuery.data.counts.medium === 1 ? 'Medium risk reference.' : 'Medium risk references.'}
                   </p>
                 )}
                 {reportQuery.data.counts.low > 0 && (
-                  <p className="text-sm font-semibold text-[#a16207]" data-testid="report-stat-low">
+                  <p className="text-sm font-semibold text-[#70964b]" data-testid="report-stat-low">
                     {reportQuery.data.counts.low} {reportQuery.data.counts.low === 1 ? 'Low risk reference.' : 'Low risk references.'}
                   </p>
                 )}
@@ -2528,6 +2517,12 @@ function EvidencePreview({
     (!preview && detection.sourceRef?.toLowerCase().includes('audio'));
 
   if (isAudio) {
+    let cleanSubtitle = detection.contextSnippet || detection.name;
+    const metaMatch = cleanSubtitle.match(/^Spoken dialogue mentioning\s+(.*?)\s+in the scene$/i);
+    if (metaMatch && metaMatch[1]) {
+      cleanSubtitle = `... ${metaMatch[1]} ...`;
+    }
+
     return (
       <div className="mb-4 rounded-lg border border-white/15 bg-black/30 p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3 pb-2.5 mb-2.5 border-b border-white/10">
@@ -2539,17 +2534,16 @@ function EvidencePreview({
               Audio Dialogue & Subtitles
             </span>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-md bg-black/50 px-2.5 py-1 text-xs font-bold text-amber-300 border border-amber-500/30">
-            <Clock size={12} />
+          <span className="inline-flex items-center rounded-md bg-black px-2.5 py-1 text-xs font-bold text-white">
             <span>Timestamp: {timeInfo.timeStr}</span>
           </span>
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-wider opacity-75 font-semibold mb-1">
-            Spoken Subtitle Text
+            Spoken Subtitle Text:
           </p>
-          <blockquote className="rounded-md border-l-3 border-amber-400 bg-black/40 p-3 text-sm italic leading-relaxed text-white font-medium">
-            &ldquo;{detection.contextSnippet || detection.name}&rdquo;
+          <blockquote className="rounded-md bg-black/40 p-3 text-sm italic leading-relaxed text-white font-medium">
+            &ldquo;{cleanSubtitle}&rdquo;
           </blockquote>
         </div>
         {preview?.filename && (
@@ -2644,17 +2638,17 @@ function DetectionRow({
 
   const riskTitleColor =
     detection.riskLevel === 'high'
-      ? 'text-red-700'
+      ? 'text-[#d24624]'
       : detection.riskLevel === 'medium'
-      ? 'text-orange-600'
-      : 'text-[#a16207]';
+      ? 'text-[#f8a01a]'
+      : 'text-[#70964b]';
 
   const riskSolidBg =
     detection.riskLevel === 'high'
-      ? 'bg-[#dc2626]'
+      ? 'bg-[#d24624]'
       : detection.riskLevel === 'medium'
-      ? 'bg-[#ea580c]'
-      : 'bg-[#ca8a04]';
+      ? 'bg-[#f8a01a]'
+      : 'bg-[#70964b]';
 
   const riskLabel =
     detection.riskLevel === 'high'
@@ -2758,57 +2752,49 @@ function AgentReasoningPanel({ toolCalls }: { toolCalls?: ToolCallEntry[] }) {
   const [open, setOpen] = useState(false);
   if (!toolCalls || toolCalls.length === 0) return null;
 
-  const toolColors: Record<string, string> = {
-    extract_script_entities: 'bg-blue-100 text-blue-800',
-    detect_visual_logos: 'bg-purple-100 text-purple-800',
-    transcribe_and_flag_dialogue: 'bg-indigo-100 text-indigo-800',
-    score_risk: 'bg-amber-100 text-amber-900',
-    request_closer_look: 'bg-pink-100 text-pink-800',
-    store_detection: 'bg-emerald-100 text-emerald-800',
-    query_prior_detections: 'bg-slate-100 text-slate-800',
-  };
-
   return (
     <section className="rounded-xl border border-border bg-card shadow-sm">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-4 p-5 sm:px-6"
+        className="flex w-full items-center justify-between gap-4 p-5 sm:px-6 cursor-pointer"
         data-testid="button-toggle-reasoning"
       >
-        <div className="flex items-center gap-3">
-          <span className="grid size-8 place-items-center rounded-full bg-accent/20 text-accent-foreground">
-            <Wrench size={15} />
-          </span>
-          <div className="text-left">
-            <h2 className="text-sm font-bold tracking-tight text-foreground">Agent Autonomous Decision Log</h2>
-            <p className="text-xs text-muted-foreground">
-              {toolCalls.length} tool executions autonomously orchestrated by Google Gemini ADK
-            </p>
-          </div>
+        <div className="text-left">
+          <h2 className="text-sm font-bold tracking-tight text-foreground">Agent Autonomous Decision Log</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {toolCalls.length} tool executions autonomously orchestrated by Google Gemini ADK
+          </p>
         </div>
         <ChevronDown size={15} className={`text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="border-t border-border px-5 py-4 sm:px-6 fade-up">
-          <div className="space-y-2">
-            {toolCalls.map((tc, i) => (
-              <div key={i} className="flex items-start gap-3 text-xs">
-                <span className="mt-0.5 text-[9px] text-muted-foreground/60 tabular-nums shrink-0 font-medium">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <span
-                  className={`inline-flex shrink-0 items-center rounded px-2 py-0.5 text-[9px] font-bold ${
-                    toolColors[tc.tool] ?? 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {tc.tool}
-                </span>
-                <span className="text-muted-foreground truncate">{tc.result_summary}</span>
-              </div>
-            ))}
-          </div>
+        <div className="border-t border-border px-5 py-4 sm:px-6 fade-up overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-border/80 text-muted-foreground font-semibold">
+                <th className="py-2.5 pr-4 w-12 font-medium">#</th>
+                <th className="py-2.5 pr-6 w-56 font-medium">Tool Execution</th>
+                <th className="py-2.5 font-medium">Result Summary</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/40">
+              {toolCalls.map((tc, i) => (
+                <tr key={i} className="hover:bg-muted/30 transition-colors">
+                  <td className="py-2.5 pr-4 font-mono text-[11px] text-muted-foreground/70">
+                    {String(i + 1).padStart(2, '0')}
+                  </td>
+                  <td className="py-2.5 pr-6 font-mono text-[11px] font-semibold text-foreground">
+                    {tc.tool}
+                  </td>
+                  <td className="py-2.5 text-muted-foreground">
+                    {tc.result_summary}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </section>
@@ -2841,7 +2827,7 @@ function AnalyticsPage() {
   if (loading) return <LoadingScreen label="Loading ClickHouse intelligence…" />;
   if (error || !data) return <ErrorScreen message={error || 'No analytics data available'} onRetry={() => window.location.reload()} />;
 
-  const riskColors: Record<string, string> = { high: '#ef4444', medium: '#f59e0b', low: '#10b981' };
+  const riskColors: Record<string, string> = { high: '#d24624', medium: '#f8a01a', low: '#70964b' };
   const maxBrandCount = Math.max(...data.topBrands.map((b) => b.detectionCount), 1);
 
   return (

@@ -120,7 +120,7 @@ export function createClearanceTools(
         .describe("brand | logo | celebrity_name | song | existing_ip"),
       context: z
         .string()
-        .describe("The context in which the entity appears"),
+        .describe("The context in which the entity appears. For audio dialogue, this MUST be the exact verbatim transcribed spoken words/subtitle uttered by the speaker."),
       prominence: z
         .string()
         .describe("background | moderate | featured"),
@@ -203,7 +203,7 @@ export function createClearanceTools(
       name: z.string().describe("The entity name"),
       source_type: z.string().describe("script | visual | audio"),
       source_ref: z.string().describe("Scene/line reference or timestamp"),
-      context_snippet: z.string().describe("Short context description"),
+      context_snippet: z.string().describe("For audio dialogue: the exact verbatim spoken subtitle quote uttered by the character/speaker. For script/visual: the scene excerpt or context."),
       confidence: z.number().describe("Detection confidence 0-1"),
       risk_level: z.string().describe("low | medium | high"),
       rationale: z.string().describe("Risk assessment rationale"),
@@ -279,6 +279,7 @@ IMPORTANT RULES:
 4. Before storing final detections, call query_prior_detections to check what's already been found in this project — avoid duplicates.
 5. Call store_detection for each entity you want to include in the final report.
 6. Be thorough but precise — don't flag generic objects or fictional names. Only flag real third-party IP.
+7. For audio/dialogue: context_snippet MUST be the literal transcribed spoken words/subtitle uttered by the speaker. NEVER output meta descriptions like "Spoken dialogue mentioning...".
 
 The asset information will be provided in the user message.`,
     tools,

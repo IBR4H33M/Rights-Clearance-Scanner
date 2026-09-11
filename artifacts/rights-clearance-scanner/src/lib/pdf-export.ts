@@ -28,7 +28,7 @@ export function exportReportToPDF(report: Report & { name?: string }, projectTit
       : 'LOW RISK — PROCEED TO EDIT LOCK';
 
   const statusColor =
-    highCount > 0 ? '#b91c1c' : medCount > 0 ? '#b45309' : '#047857';
+    highCount > 0 ? '#d24624' : medCount > 0 ? '#f8a01a' : '#70964b';
 
   const detectionsHtml = report.detections
     .map(
@@ -44,12 +44,12 @@ export function exportReportToPDF(report: Report & { name?: string }, projectTit
               ${d.category.replace('_', ' ')}
             </span>
           </div>
-          <span style="font-weight: bold; font-size: 11px; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; background: ${
+          <span style="font-weight: bold; font-size: 11px; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; ${
             d.riskLevel === 'high'
-              ? '#fee2e2; color: #991b1b;'
+              ? 'background: #fdf2f0; color: #d24624; border: 1px solid #d24624;'
               : d.riskLevel === 'medium'
-              ? '#fef3c7; color: #92400e;'
-              : '#d1fae5; color: #065f46;'
+              ? 'background: #fff8eb; color: #f8a01a; border: 1px solid #f8a01a;'
+              : 'background: #f2f7ed; color: #70964b; border: 1px solid #70964b;'
           }">
             ${d.riskLevel} RISK
           </span>
@@ -200,17 +200,17 @@ export function exportReportToPDF(report: Report & { name?: string }, projectTit
             <div style="font-size: 9px; text-transform: uppercase; color: #6b7280; font-weight: bold;">TOTAL FINDINGS</div>
             <div style="font-size: 22px; font-weight: 900; color: #111827;">${totalFindings}</div>
           </div>
-          <div class="stat-box" style="background: #fee2e2;">
-            <div style="font-size: 9px; text-transform: uppercase; color: #991b1b; font-weight: bold;">HIGH RISK</div>
-            <div style="font-size: 22px; font-weight: 900; color: #991b1b;">${highCount}</div>
+          <div class="stat-box" style="background: #fdf2f0;">
+            <div style="font-size: 9px; text-transform: uppercase; color: #d24624; font-weight: bold;">HIGH RISK</div>
+            <div style="font-size: 22px; font-weight: 900; color: #d24624;">${highCount}</div>
           </div>
-          <div class="stat-box" style="background: #fef3c7;">
-            <div style="font-size: 9px; text-transform: uppercase; color: #92400e; font-weight: bold;">MEDIUM RISK</div>
-            <div style="font-size: 22px; font-weight: 900; color: #92400e;">${medCount}</div>
+          <div class="stat-box" style="background: #fff8eb;">
+            <div style="font-size: 9px; text-transform: uppercase; color: #f8a01a; font-weight: bold;">MEDIUM RISK</div>
+            <div style="font-size: 22px; font-weight: 900; color: #f8a01a;">${medCount}</div>
           </div>
-          <div class="stat-box" style="background: #d1fae5; margin-right: 0;">
-            <div style="font-size: 9px; text-transform: uppercase; color: #065f46; font-weight: bold;">LOW RISK</div>
-            <div style="font-size: 22px; font-weight: 900; color: #065f46;">${lowCount}</div>
+          <div class="stat-box" style="background: #f2f7ed; margin-right: 0;">
+            <div style="font-size: 9px; text-transform: uppercase; color: #70964b; font-weight: bold;">LOW RISK</div>
+            <div style="font-size: 22px; font-weight: 900; color: #70964b;">${lowCount}</div>
           </div>
         </div>
 
