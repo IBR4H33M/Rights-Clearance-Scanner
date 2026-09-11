@@ -1442,7 +1442,7 @@ function Home({
                   )}
                   {selectedProject && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Created {formatDate(selectedProject.createdAt)} · Chain-of-Title Audit Active
+                      Created {formatDate(selectedProject.createdAt)}
                     </p>
                   )}
                 </div>
