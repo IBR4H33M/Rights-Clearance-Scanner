@@ -77,4 +77,5 @@ export const SCHEMA_SQL = [
   ) ENGINE = ReplacingMergeTree(updated_at) ORDER BY (project_id)`,
 
   `ALTER TABLE projects ADD COLUMN IF NOT EXISTS user_id String DEFAULT ''`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS previews_json String DEFAULT '[]'`,
 ];

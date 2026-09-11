@@ -19,6 +19,8 @@ import {
 import {
   uploadAsset as cloudinaryUpload,
   deleteAsset as cloudinaryDelete,
+  deleteAssetByUrl as cloudinaryDeleteByUrl,
+  deleteProjectFolder as cloudinaryDeleteProjectFolder,
   fetchAssetBuffer,
 } from "@workspace/cloudinary-storage";
 import { analyzeAsset, type ToolCallLog } from "@workspace/agent";
@@ -214,6 +216,9 @@ router.patch("/projects/:projectId", async (req, res): Promise<void> => {
 router.delete("/projects/:projectId", async (req, res): Promise<void> => {
   const { projectId } = req.params;
   try {
+    // Delete all assets and folder for this project in Cloudinary
+    await cloudinaryDeleteProjectFolder(projectId);
+
     await executeClickHouse(
       `ALTER TABLE projects DELETE WHERE id = '${escapeStr(projectId)}'`
     );
@@ -342,6 +347,35 @@ router.delete(
         return;
       }
 
+      const assetUrl = String(rows[0]?.cloudinary_url ?? "");
+
+      // Check if any report was generated for this project that references this asset/URL
+      const { rows: reportRows } = await queryClickHouse(
+        `SELECT id, previews_json, detections_json FROM reports WHERE project_id = '${escapeStr(params.data.projectId)}'`
+      );
+
+      let referencedInReport = false;
+      if (assetUrl) {
+        for (const rep of reportRows) {
+          const previewsStr = String(rep.previews_json ?? "");
+          const detectionsStr = String(rep.detections_json ?? "");
+          if (
+            previewsStr.includes(assetUrl) ||
+            previewsStr.includes(params.data.assetId) ||
+            detectionsStr.includes(params.data.assetId)
+          ) {
+            referencedInReport = true;
+            break;
+          }
+        }
+      }
+
+      // If NOT referenced in any report, delete from Cloudinary immediately.
+      // If referenced in a report, keep the Cloudinary file so report snippets & bounding boxes remain working.
+      if (!referencedInReport && assetUrl) {
+        await cloudinaryDeleteByUrl(assetUrl);
+      }
+
       // Delete from ClickHouse (assets + related detections)
       await executeClickHouse(
         `ALTER TABLE detections DELETE WHERE asset_id = '${escapeStr(params.data.assetId)}'`
@@ -384,6 +418,19 @@ router.post(
     );
     if (assetRows.length === 0) {
       res.status(400).json({ error: "Add at least one asset before analyzing" });
+      return;
+    }
+
+    const requestedAssetIds: string[] | undefined = Array.isArray(req.body?.assetIds)
+      ? req.body.assetIds.map(String)
+      : undefined;
+
+    const targetAssetRows = requestedAssetIds && requestedAssetIds.length > 0
+      ? assetRows.filter((a) => requestedAssetIds.includes(String(a.id)))
+      : assetRows;
+
+    if (targetAssetRows.length === 0) {
+      res.status(400).json({ error: "No matching assets selected for analysis" });
       return;
     }
 
@@ -439,8 +486,8 @@ router.post(
         },
       };
 
-      // Run the agent on each asset
-      for (const assetRow of assetRows) {
+      // Run the agent on each selected asset
+      for (const assetRow of targetAssetRows) {
         const asset = {
           id: String(assetRow.id),
           projectId,
@@ -495,8 +542,8 @@ router.post(
         };
       });
 
-      // Build previews from assets
-      const previews = assetRows
+      // Build previews from analyzed assets
+      const previews = targetAssetRows
         .filter((a) => String(a.type) === "image" || String(a.type) === "video" || String(a.type) === "audio")
         .map((a) => ({
           assetId: String(a.id),
@@ -524,11 +571,11 @@ router.post(
         generatedAt: new Date().toISOString(),
         summary:
           detections.length > 0
-            ? `${detections.length} potential rights references found across ${assetRows.length} asset${assetRows.length === 1 ? "" : "s"}.`
-            : `No obvious third-party references found across ${assetRows.length} asset${assetRows.length === 1 ? "" : "s"}.`,
+            ? `${detections.length} potential rights references found across ${targetAssetRows.length} asset${targetAssetRows.length === 1 ? "" : "s"}.`
+            : `No obvious third-party references found across ${targetAssetRows.length} asset${targetAssetRows.length === 1 ? "" : "s"}.`,
         counts,
         detections,
-        analyzedAssets: assetRows.length,
+        analyzedAssets: targetAssetRows.length,
         previews,
         toolCalls: allToolCalls,
       };
@@ -536,9 +583,10 @@ router.post(
       try {
         const detectionsJson = JSON.stringify(detections);
         const toolCallsJson = JSON.stringify(allToolCalls);
+        const previewsJson = JSON.stringify(previews);
         await executeClickHouse(
-          `INSERT INTO reports (id, project_id, name, summary, risk_high, risk_medium, risk_low, analyzed_assets, detections_json, tool_calls_json, generated_at)
-           VALUES ('${escapeStr(reportId)}', '${escapeStr(projectId)}', '${escapeStr(reportName)}', '${escapeStr(report.summary)}', ${counts.high}, ${counts.medium}, ${counts.low}, ${assetRows.length}, '${escapeStr(detectionsJson)}', '${escapeStr(toolCallsJson)}', '${now}')`
+          `INSERT INTO reports (id, project_id, name, summary, risk_high, risk_medium, risk_low, analyzed_assets, detections_json, tool_calls_json, previews_json, generated_at)
+           VALUES ('${escapeStr(reportId)}', '${escapeStr(projectId)}', '${escapeStr(reportName)}', '${escapeStr(report.summary)}', ${counts.high}, ${counts.medium}, ${counts.low}, ${targetAssetRows.length}, '${escapeStr(detectionsJson)}', '${escapeStr(toolCallsJson)}', '${escapeStr(previewsJson)}', '${now}')`
         );
 
         await executeClickHouse(
@@ -626,21 +674,42 @@ router.get("/projects/:projectId/reports/:reportId", async (req, res): Promise<v
       if (r.tool_calls_json) toolCalls = JSON.parse(String(r.tool_calls_json));
     } catch { /* ignore */ }
 
-    const { rows: assetRows } = await queryClickHouse(
-      `SELECT id, project_id, type, cloudinary_url, filename, mime_type, width, height FROM assets WHERE project_id = '${escapeStr(projectId)}'`
-    );
+    let previews: Array<{
+      assetId: string;
+      filename: string;
+      type: "image" | "video";
+      mimeType: string;
+      dataUrl: string;
+      width: number;
+      height: number;
+    }> = [];
 
-    const previews = assetRows
-      .filter((a) => String(a.type) === "image" || String(a.type) === "video" || String(a.type) === "audio")
-      .map((a) => ({
-        assetId: String(a.id),
-        filename: String(a.filename),
-        type: String(a.type) as "image" | "video",
-        mimeType: String(a.mime_type),
-        dataUrl: String(a.cloudinary_url),
-        width: Number(a.width ?? 0),
-        height: Number(a.height ?? 0),
-      }));
+    if (r.previews_json) {
+      try {
+        const parsed = JSON.parse(String(r.previews_json));
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          previews = parsed;
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (previews.length === 0) {
+      const { rows: assetRows } = await queryClickHouse(
+        `SELECT id, project_id, type, cloudinary_url, filename, mime_type, width, height FROM assets WHERE project_id = '${escapeStr(projectId)}'`
+      );
+
+      previews = assetRows
+        .filter((a) => String(a.type) === "image" || String(a.type) === "video" || String(a.type) === "audio")
+        .map((a) => ({
+          assetId: String(a.id),
+          filename: String(a.filename),
+          type: String(a.type) as "image" | "video",
+          mimeType: String(a.mime_type),
+          dataUrl: String(a.cloudinary_url),
+          width: Number(a.width ?? 0),
+          height: Number(a.height ?? 0),
+        }));
+    }
 
     res.json({
       id: String(r.id),
@@ -654,7 +723,7 @@ router.get("/projects/:projectId/reports/:reportId", async (req, res): Promise<v
         low: Number(r.risk_low ?? 0),
       },
       detections,
-      analyzedAssets: Number(r.analyzed_assets ?? 0),
+      analyzedAssets: Number(r.analyzed_assets ?? previews.length),
       previews,
       toolCalls,
     });
@@ -665,14 +734,61 @@ router.get("/projects/:projectId/reports/:reportId", async (req, res): Promise<v
 });
 
 // ─── DELETE /projects/:projectId/reports/:reportId ──────────────────────────
-// Delete a specific report
-
+// Delete a specific report and clean up orphaned Cloudinary media
 router.delete("/projects/:projectId/reports/:reportId", async (req, res): Promise<void> => {
   const { projectId, reportId } = req.params;
   try {
+    // 1. Fetch report details first to inspect previews and detections for Cloudinary URLs
+    const { rows: reportRows } = await queryClickHouse(
+      `SELECT previews_json, detections_json FROM reports WHERE id = '${escapeStr(reportId)}' AND project_id = '${escapeStr(projectId)}' LIMIT 1`
+    );
+
+    // 2. Delete report from ClickHouse
     await executeClickHouse(
       `ALTER TABLE reports DELETE WHERE id = '${escapeStr(reportId)}' AND project_id = '${escapeStr(projectId)}'`
     );
+
+    // 3. Check for any orphaned Cloudinary assets
+    if (reportRows.length > 0) {
+      const r = reportRows[0]!;
+      const urlsToCheck = new Set<string>();
+
+      if (r.previews_json) {
+        try {
+          const previews = JSON.parse(String(r.previews_json));
+          if (Array.isArray(previews)) {
+            for (const p of previews) {
+              if (p?.dataUrl && typeof p.dataUrl === "string" && p.dataUrl.includes("cloudinary.com")) {
+                urlsToCheck.add(p.dataUrl);
+              }
+            }
+          }
+        } catch { /* ignore */ }
+      }
+
+      // Check if any of these URLs are still active assets or in any remaining reports
+      for (const url of urlsToCheck) {
+        try {
+          const { rows: activeAssetRows } = await queryClickHouse(
+            `SELECT count() as cnt FROM assets WHERE cloudinary_url = '${escapeStr(url)}'`
+          );
+          const activeCount = Number(activeAssetRows[0]?.cnt ?? 0);
+
+          const { rows: otherReportRows } = await queryClickHouse(
+            `SELECT count() as cnt FROM reports WHERE previews_json LIKE '%${escapeStr(url)}%'`
+          );
+          const reportCount = Number(otherReportRows[0]?.cnt ?? 0);
+
+          if (activeCount === 0 && reportCount === 0) {
+            console.log(`Report deleted: deleting orphaned Cloudinary media for URL: ${url}`);
+            await cloudinaryDeleteByUrl(url);
+          }
+        } catch (delErr) {
+          console.warn(`Could not delete orphaned Cloudinary asset for ${url}:`, delErr);
+        }
+      }
+    }
+
     res.json({ success: true, message: "Report deleted successfully" });
   } catch (err) {
     console.error("Error deleting report:", err);
@@ -772,6 +888,19 @@ router.get("/projects/:projectId/report", async (req, res): Promise<void> => {
         if (r.tool_calls_json) toolCalls = JSON.parse(String(r.tool_calls_json));
       } catch { /* ignore */ }
 
+      let reportPreviews: typeof previews = [];
+      if (r.previews_json) {
+        try {
+          const parsed = JSON.parse(String(r.previews_json));
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            reportPreviews = parsed;
+          }
+        } catch { /* ignore */ }
+      }
+      if (reportPreviews.length === 0) {
+        reportPreviews = previews;
+      }
+
       res.json({
         id: String(r.id),
         projectId: String(r.project_id),
@@ -784,8 +913,8 @@ router.get("/projects/:projectId/report", async (req, res): Promise<void> => {
           low: Number(r.risk_low ?? 0),
         },
         detections,
-        analyzedAssets: Number(r.analyzed_assets ?? assetRows.length),
-        previews,
+        analyzedAssets: Number(r.analyzed_assets ?? reportPreviews.length),
+        previews: reportPreviews,
         toolCalls,
       });
       return;

@@ -92,6 +92,65 @@ export async function deleteAsset(
 }
 
 /**
+ * Delete an asset from Cloudinary using its full secure_url.
+ */
+export async function deleteAssetByUrl(url: string): Promise<boolean> {
+  if (!url || !url.includes("cloudinary.com")) return false;
+  ensureConfigured();
+
+  try {
+    const match = url.match(/\/(image|video|raw)\/upload\/(?:v\d+\/)?(.+)$/);
+    if (!match) return false;
+
+    const resourceType = match[1] as "image" | "video" | "raw";
+    let publicIdWithExt = match[2];
+
+    let publicId = publicIdWithExt;
+    if (resourceType !== "raw") {
+      publicId = publicIdWithExt.replace(/\.[a-zA-Z0-9]+$/, "");
+    }
+
+    const result = await cloudinary.uploader.destroy(publicId, {
+      resource_type: resourceType,
+    });
+    console.log(`[Cloudinary] Destroyed ${publicId} (${resourceType}):`, result?.result);
+    return result?.result === "ok";
+  } catch (err) {
+    console.error("[Cloudinary] Error deleting asset by URL:", err);
+    return false;
+  }
+}
+
+/**
+ * Delete all assets and the folder for a given project from Cloudinary.
+ */
+export async function deleteProjectFolder(projectId: string): Promise<void> {
+  if (!projectId) return;
+  ensureConfigured();
+
+  const folder = `rights-clearance/${projectId}`;
+  try {
+    for (const rType of ["image", "video", "raw"] as const) {
+      try {
+        await cloudinary.api.delete_resources_by_prefix(`${folder}/`, {
+          resource_type: rType,
+        });
+      } catch {
+        // Ignore if no resources of this type exist in the folder
+      }
+    }
+    try {
+      await cloudinary.api.delete_folder(folder);
+      console.log(`[Cloudinary] Deleted project folder: ${folder}`);
+    } catch {
+      // Ignore if folder not found or already deleted
+    }
+  } catch (err) {
+    console.error(`[Cloudinary] Error deleting project folder ${folder}:`, err);
+  }
+}
+
+/**
  * Fetch asset bytes from a Cloudinary URL (for passing to Gemini).
  */
 export async function fetchAssetBuffer(url: string): Promise<Buffer> {

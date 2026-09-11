@@ -1,5 +1,5 @@
 import { type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient, useMutation } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -79,6 +79,20 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   }
   return fallback;
 };
+
+const formatBytes = (bytes?: number): string => {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const getAssetTypeIcon = (type: string) => {
+  if (type === 'video') return <Film size={16} className="text-amber-600 shrink-0" />;
+  if (type === 'image') return <ImageIcon size={16} className="text-blue-600 shrink-0" />;
+  return <FileText size={16} className="text-emerald-600 shrink-0" />;
+};
+
 
 const getMediaDimensions = (file: File, type: string) =>
   new Promise<{ width: number; height: number }>((resolve) => {
@@ -1126,7 +1140,59 @@ function Home({
 
   const uploadAsset = useUploadAsset();
   const deleteAsset = useDeleteAsset();
-  const analyzeProject = useAnalyzeProject();
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+
+  // Auto-select all project assets when project changes or assets are updated
+  useEffect(() => {
+    if (selectedProject?.assets) {
+      setSelectedAssetIds(new Set(selectedProject.assets.map((a) => a.id)));
+    } else {
+      setSelectedAssetIds(new Set());
+    }
+  }, [selectedProject?.id, selectedProject?.assets?.length]);
+
+  const toggleAssetSelection = (id: string) => {
+    setSelectedAssetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const selectAllAssets = () => {
+    if (selectedProject?.assets) {
+      setSelectedAssetIds(new Set(selectedProject.assets.map((a) => a.id)));
+    }
+  };
+
+  const deselectAllAssets = () => {
+    setSelectedAssetIds(new Set());
+  };
+
+  const analyzeMutation = useMutation({
+    mutationFn: async (assetIds: string[]) => {
+      const res = await fetch(`/api/projects/${selectedId}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetIds }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.error || `Analysis failed with status ${res.status}`);
+      }
+      return (await res.json()) as Report;
+    },
+    onSuccess: (report) => {
+      queryClient.setQueryData(getGetProjectReportQueryKey(selectedId ?? ''), report);
+      queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+    },
+    onError: (error) =>
+      setAnalysisError(getErrorMessage(error, 'Analysis could not be completed. Try again.')),
+  });
 
   const [assetPendingDelete, setAssetPendingDelete] = useState<Project['assets'][number] | null>(null);
 
@@ -1302,19 +1368,9 @@ function Home({
   };
 
   const runAnalysis = () => {
-    if (!selectedId || !selectedProject?.assetCount || analyzeProject.isPending) return;
+    if (!selectedId || selectedAssetIds.size === 0 || analyzeMutation.isPending) return;
     setAnalysisError('');
-    analyzeProject.mutate(
-      { projectId: selectedId },
-      {
-        onSuccess: (report) => {
-          queryClient.setQueryData(getGetProjectReportQueryKey(selectedId), report);
-          queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
-        },
-        onError: (error) =>
-          setAnalysisError(getErrorMessage(error, 'Analysis could not be completed. Try again.')),
-      }
-    );
+    analyzeMutation.mutate(Array.from(selectedAssetIds));
   };
 
   return (
@@ -1412,9 +1468,9 @@ function Home({
                 {/* Upload Section */}
                 <div className="mt-6">
                   <div className="mb-3">
-                    <h3 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground font-montserrat">
+                    <h2 className="text-xl font-bold tracking-tight font-montserrat text-foreground">
                       Upload Assets
-                    </h3>
+                    </h2>
                     <div className="mt-1">
                       <span className="text-[10px] text-accent-foreground font-semibold bg-accent/15 px-2 py-0.5 rounded border border-accent/30">
                         Tier Limit: {limitLabel} per file
@@ -1510,9 +1566,9 @@ function Home({
                 <div className="mt-8 pt-6 border-t border-border/80">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                      <h3 className="text-sm font-semibold tracking-tight uppercase text-muted-foreground font-montserrat">
+                      <h2 className="text-xl font-bold tracking-tight font-montserrat text-foreground">
                         Clearance inspection
-                      </h3>
+                      </h2>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Invokes Gemini ADK with dynamic tool selection (logos, script text, audio transcripts, and closer-look passes)
                       </p>
@@ -1521,11 +1577,11 @@ function Home({
                     <button
                       type="button"
                       onClick={runAnalysis}
-                      disabled={!selectedProject?.assetCount || analyzeProject.isPending}
-                      className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={selectedAssetIds.size === 0 || analyzeMutation.isPending}
+                      className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
                       data-testid="button-run-analysis"
                     >
-                      {analyzeProject.isPending ? (
+                      {analyzeMutation.isPending ? (
                         <>
                           <LoaderCircle size={15} className="animate-spin" />
                           <span>Agent Inspecting Assets…</span>
@@ -1533,46 +1589,96 @@ function Home({
                       ) : (
                         <>
                           <Play size={14} fill="currentColor" />
-                          <span>Run clearance Scan</span>
+                          <span>Run clearance Scan {selectedAssetIds.size > 0 ? `(${selectedAssetIds.size})` : ''}</span>
                         </>
                       )}
                     </button>
                   </div>
 
-                  {/* Clearance Terminal while running, else regular status indicator */}
-                  {analyzeProject.isPending ? (
-                    <ClearanceAgentTerminal
-                      projectId={selectedProject.id}
-                      assetCount={selectedProject.assetCount}
-                    />
-                  ) : (
-                    <div className="mt-4 flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
-                      <div
-                        className={`grid size-8 place-items-center rounded-full ${
-                          selectedProject?.reportStatus === 'ready'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-secondary text-muted-foreground'
-                        }`}
-                      >
-                        {selectedProject?.reportStatus === 'ready' ? (
-                          <Check size={16} />
-                        ) : (
-                          <ScanSearch size={16} />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1 text-xs">
-                        <p className="font-semibold text-foreground">
-                          {selectedProject?.reportStatus === 'ready'
-                            ? 'Scan complete — findings archived in ClickHouse'
-                            : 'Awaiting source material'}
-                        </p>
-                        <p className="text-muted-foreground mt-0.5">
-                          {selectedProject?.reportStatus === 'ready'
-                            ? 'Clearance report ready for review and legal export below.'
-                            : 'Add files and trigger analysis to generate a clearance report.'}
-                        </p>
+                  {/* Asset Selection Checklist */}
+                  <div className="mt-5 rounded-lg border border-border/80 bg-card overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b border-border/70 text-xs">
+                      <span className="font-semibold text-foreground">
+                        {selectedAssetIds.size} of {selectedProject.assets.length} {selectedProject.assets.length === 1 ? 'asset' : 'assets'} selected for inspection
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={selectAllAssets}
+                          className="font-medium text-primary hover:underline cursor-pointer"
+                        >
+                          Select all
+                        </button>
+                        <span className="text-muted-foreground">·</span>
+                        <button
+                          type="button"
+                          onClick={deselectAllAssets}
+                          className="font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+                        >
+                          Deselect all
+                        </button>
                       </div>
                     </div>
+
+                    {selectedProject.assets.length === 0 ? (
+                      <div className="py-6 px-4 text-center text-xs text-muted-foreground">
+                        No files added yet. Drop scripts, clips, or props photos above to select them for inspection.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-border/60">
+                        {selectedProject.assets.map((asset) => {
+                          const isSelected = selectedAssetIds.has(asset.id);
+                          return (
+                            <label
+                              key={asset.id}
+                              className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
+                                isSelected ? 'bg-primary/[0.03] hover:bg-primary/[0.06]' : 'hover:bg-muted/30 opacity-70'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleAssetSelection(asset.id)}
+                                  className="size-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer accent-primary"
+                                />
+                                <div className="grid size-8 place-items-center rounded bg-secondary/80 shrink-0">
+                                  {getAssetTypeIcon(asset.type)}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-foreground truncate" title={asset.filename}>
+                                    {asset.filename}
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground capitalize">
+                                    {asset.type}
+                                    {asset.sizeBytes ? ` · ${formatBytes(asset.sizeBytes)}` : ''}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="shrink-0 text-[11px] font-mono font-medium ml-3">
+                                {isSelected ? (
+                                  <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
+                                    Selected
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">
+                                    Excluded
+                                  </span>
+                                )}
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Clearance Terminal while running */}
+                  {analyzeMutation.isPending && (
+                    <ClearanceAgentTerminal
+                      projectId={selectedProject.id}
+                      assetCount={selectedAssetIds.size}
+                    />
                   )}
 
                   {analysisError && (
