@@ -88,7 +88,7 @@ const formatBytes = (bytes?: number): string => {
 };
 
 const getAssetTypeIcon = (type: string) => {
-  if (type === 'video') return <Film size={16} className="text-amber-600 shrink-0" />;
+  if (type === 'video') return <Film size={16} className="text-black shrink-0" />;
   if (type === 'image') return <ImageIcon size={16} className="text-blue-600 shrink-0" />;
   return <FileText size={16} className="text-emerald-600 shrink-0" />;
 };
@@ -1179,10 +1179,17 @@ function WorkspaceHomepage({
 
   const getMediaThumbnail = (proj: Project) => {
     if (!proj.assets || proj.assets.length === 0) return null;
-    const media = proj.assets.find(
-      (a) => (a.type === 'image' || a.type === 'video') && a.previewDataUrl
-    );
-    return media?.previewDataUrl ?? null;
+    // Strictly take from the first uploaded asset
+    const firstAsset = proj.assets[0];
+    if (!firstAsset || !firstAsset.previewDataUrl) return null;
+    const url = firstAsset.previewDataUrl;
+    if (firstAsset.type === 'video' && url.includes('cloudinary.com')) {
+      const jpgUrl = url
+        .replace(/\/video\/upload\/(?:v\d+\/)?/, (m) => m.replace('/video/upload/', '/video/upload/so_1,w_640,h_360,c_fill,f_jpg/'))
+        .replace(/\.[a-zA-Z0-9]+$/, '.jpg');
+      return { type: 'video', url, thumbUrl: jpgUrl };
+    }
+    return { type: firstAsset.type, url, thumbUrl: url };
   };
 
   return (
@@ -1242,7 +1249,7 @@ function WorkspaceHomepage({
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="size-9 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/60">
                             {thumb ? (
-                              <img src={thumb} alt="" className="size-full object-cover" />
+                              <img src={thumb.thumbUrl} alt="" className="size-full object-cover" />
                             ) : (
                               <Film size={16} className="text-muted-foreground/60" />
                             )}
@@ -1322,9 +1329,24 @@ function WorkspaceHomepage({
                   <div className="relative aspect-video w-full overflow-hidden bg-muted/40 border-b border-border/60 flex items-center justify-center">
                     {thumbnail ? (
                       <img
-                        src={thumbnail}
+                        src={thumbnail.thumbUrl}
                         alt={p.title}
                         className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          if (thumbnail.type === 'video' && thumbnail.url) {
+                            const parent = e.currentTarget.parentElement;
+                            if (parent && !parent.querySelector('video')) {
+                              e.currentTarget.style.display = 'none';
+                              const vid = document.createElement('video');
+                              vid.src = `${thumbnail.url}#t=0.5`;
+                              vid.className = 'size-full object-cover pointer-events-none';
+                              vid.muted = true;
+                              vid.playsInline = true;
+                              vid.preload = 'metadata';
+                              parent.appendChild(vid);
+                            }
+                          }
+                        }}
                       />
                     ) : (
                       <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground/50 group-hover:text-primary transition-colors">
@@ -1332,15 +1354,6 @@ function WorkspaceHomepage({
                         <span className="text-[10px] tracking-wider uppercase font-semibold">No media attached</span>
                       </div>
                     )}
-                    <span
-                      className={`absolute top-2.5 right-2.5 rounded-full px-2.5 py-0.5 text-[10px] font-semibold backdrop-blur-md shadow-sm ${
-                        p.reportStatus === 'ready'
-                          ? 'bg-emerald-500/90 text-white'
-                          : 'bg-zinc-800/80 text-zinc-300'
-                      }`}
-                    >
-                      {p.reportStatus === 'ready' ? 'Report Ready' : 'Not Started'}
-                    </span>
                   </div>
 
                   {/* Card Content */}
@@ -1952,9 +1965,13 @@ function Home({
                                   onChange={() => toggleAssetSelection(asset.id)}
                                   className="size-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer accent-primary"
                                 />
-                                <div className="grid size-8 place-items-center rounded bg-secondary/80 shrink-0">
-                                  {getAssetTypeIcon(asset.type)}
-                                </div>
+                                {asset.type === 'video' ? (
+                                  <Film size={18} className="text-black shrink-0" />
+                                ) : (
+                                  <div className="grid size-8 place-items-center rounded bg-secondary/80 shrink-0">
+                                    {getAssetTypeIcon(asset.type)}
+                                  </div>
+                                )}
                                 <div className="min-w-0 flex-1">
                                   <p className="text-sm font-medium text-foreground truncate" title={asset.filename}>
                                     {asset.filename}
@@ -2072,6 +2089,7 @@ function ReportPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [, setLocation] = useLocation();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const projectsQuery = useListProjects({
     query: {
       queryKey: [...getListProjectsQueryKey(), user?.id ?? 'anonymous'],
@@ -2080,39 +2098,84 @@ function ReportPage() {
   });
   const project = projectsQuery.data?.find((item) => item.id === projectId);
 
-  const reportQuery = useGetProjectReport(projectId ?? '', {
-    query: {
-      enabled: Boolean(projectId),
-      queryKey: getGetProjectReportQueryKey(projectId ?? ''),
-    },
-  });
+  const [allReports, setAllReports] = useState<HistoricalReportItem[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [activeReportDetail, setActiveReportDetail] = useState<Report | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
-  const detections = useMemo(() => reportQuery.data?.detections ?? [], [reportQuery.data?.detections]);
   const [filter, setFilter] = useState('all');
-  const filtered = filter === 'all' ? detections : detections.filter((d) => d.riskLevel === filter);
-
-  const [showDeleteReportModal, setShowDeleteReportModal] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState<HistoricalReportItem | null>(null);
   const [isDeletingReport, setIsDeletingReport] = useState(false);
 
+  const fetchReportsList = async () => {
+    if (!projectId) return;
+    setReportsLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/reports`);
+      if (res.ok) {
+        const data: HistoricalReportItem[] = await res.json();
+        setAllReports(data);
+        if (data.length > 0) {
+          setSelectedReportId((prev) => (prev && data.some((r) => r.id === prev) ? prev : data[0].id));
+        } else {
+          setSelectedReportId(null);
+          setActiveReportDetail(null);
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReportsList();
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!selectedReportId || !projectId) {
+      setActiveReportDetail(null);
+      return;
+    }
+    setDetailLoading(true);
+    fetch(`/api/projects/${projectId}/reports/${selectedReportId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setActiveReportDetail(data);
+      })
+      .catch(() => {})
+      .finally(() => setDetailLoading(false));
+  }, [selectedReportId, projectId]);
+
   const executeDeleteReport = async () => {
+    if (!reportToDelete || !projectId) return;
     setIsDeletingReport(true);
     try {
       const token = localStorage.getItem('rcs_token') || '';
-      const reportId = (reportQuery.data as any)?.id ?? projectId;
-      await fetch(`/api/projects/${projectId}/reports/${reportId}`, {
+      await fetch(`/api/projects/${projectId}/reports/${reportToDelete.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      queryClient.invalidateQueries({ queryKey: getGetProjectReportQueryKey(projectId!) });
+      const remaining = allReports.filter((r) => r.id !== reportToDelete.id);
+      setAllReports(remaining);
+      if (selectedReportId === reportToDelete.id) {
+        setSelectedReportId(remaining[0]?.id ?? null);
+      }
+      queryClient.invalidateQueries({ queryKey: getGetProjectReportQueryKey(projectId) });
       queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
-      setShowDeleteReportModal(false);
-      setLocation('/');
+      setReportToDelete(null);
     } catch (err) {
       alert('Failed to delete report.');
     } finally {
       setIsDeletingReport(false);
     }
   };
+
+  const currentReport = activeReportDetail;
+  const detections = useMemo(() => currentReport?.detections ?? [], [currentReport?.detections]);
+  const filtered = filter === 'all' ? detections : detections.filter((d) => d.riskLevel === filter);
 
   return (
     <div className="min-h-[100dvh]">
@@ -2122,11 +2185,11 @@ function ReportPage() {
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground font-montserrat">
               {project?.title ? `Reports for ${project.title}` : 'Reports'}
             </h1>
-            {reportQuery.data && (
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Generated {formatDate(reportQuery.data.generatedAt)} · {reportQuery.data.analyzedAssets} source assets reviewed
-              </p>
-            )}
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {allReports.length > 0
+                ? `${allReports.length} clearance audit ${allReports.length === 1 ? 'report' : 'reports'} recorded for this production in ClickHouse`
+                : 'Clearance audit history recorded in ClickHouse'}
+            </p>
             <div className="mt-3.5">
               <button
                 type="button"
@@ -2140,37 +2203,26 @@ function ReportPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {reportQuery.data && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => exportReportToPDF(reportQuery.data!, project?.title ?? 'Clearance Report')}
-                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/85 transition-colors cursor-pointer"
-                  data-testid="button-export-pdf"
-                >
-                  <Printer size={14} />
-                  <span>Export as PDF</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteReportModal(true)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors cursor-pointer"
-                  data-testid="button-delete-detail-report"
-                >
-                  <Trash2 size={14} />
-                  <span>Delete Report</span>
-                </button>
-              </>
-            )}
-          </div>
+          {currentReport && (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => exportReportToPDF(currentReport, project?.title ?? 'Clearance Report')}
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/85 transition-colors cursor-pointer"
+                data-testid="button-export-pdf"
+              >
+                <Printer size={14} />
+                <span>Export Active as PDF</span>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       <div className="mx-auto max-w-[1380px] px-5 py-8 sm:px-8 lg:px-12">
-        {reportQuery.isLoading ? (
-          <LoadingScreen label="Loading clearance audit…" />
-        ) : !reportQuery.data ? (
+        {reportsLoading ? (
+          <LoadingScreen label="Loading clearance audits…" />
+        ) : allReports.length === 0 ? (
           <div className="py-6">
             <h3 className="text-base font-bold text-foreground">No reports generated yet</h3>
             <p className="mt-1.5 text-sm text-muted-foreground">
@@ -2178,85 +2230,247 @@ function ReportPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {/* Risk Summary Banner */}
-            <section className="rounded-xl border border-border bg-card p-6 sm:p-7 shadow-sm">
-              <p className="text-[clamp(1.2rem,2.5vw,1.8rem)] font-semibold leading-snug tracking-tight text-foreground">
-                {reportQuery.data.summary}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-4">
-                {reportQuery.data.counts.high > 0 && (
-                  <p className="text-sm font-semibold text-[#d24624]" data-testid="report-stat-high">
-                    {reportQuery.data.counts.high} {reportQuery.data.counts.high === 1 ? 'high risk reference.' : 'high risk references.'}
+          <div className="space-y-8">
+            {/* All Reports Listed Section */}
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold tracking-tight text-foreground font-montserrat">
+                    All Reports ({allReports.length})
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Select any clearance audit below to inspect full evidence, detections, and agent rationale.
                   </p>
-                )}
-                {reportQuery.data.counts.medium > 0 && (
-                  <p className="text-sm font-semibold text-[#f8a01a]" data-testid="report-stat-medium">
-                    {reportQuery.data.counts.medium} {reportQuery.data.counts.medium === 1 ? 'Medium risk reference.' : 'Medium risk references.'}
-                  </p>
-                )}
-                {reportQuery.data.counts.low > 0 && (
-                  <p className="text-sm font-semibold text-[#70964b]" data-testid="report-stat-low">
-                    {reportQuery.data.counts.low} {reportQuery.data.counts.low === 1 ? 'Low risk reference.' : 'Low risk references.'}
-                  </p>
-                )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {allReports.map((r, idx) => {
+                  const isSelected = r.id === selectedReportId;
+                  return (
+                    <div
+                      key={r.id}
+                      className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border p-4 transition-all shadow-sm ${
+                        isSelected
+                          ? 'border-primary bg-primary/[0.03] ring-1 ring-primary/20'
+                          : 'border-border bg-card/60 hover:border-sidebar-primary/50'
+                      }`}
+                      data-testid={`report-row-${r.id}`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground">
+                            #{allReports.length - idx}
+                          </span>
+                          <h3 className="font-semibold text-sm text-foreground truncate">{r.name}</h3>
+                          <span className="text-[11px] text-muted-foreground">
+                            · {formatDate(r.generatedAt)} · {r.analyzedAssets} asset{r.analyzedAssets === 1 ? '' : 's'} reviewed
+                          </span>
+                          {isSelected && (
+                            <span className="rounded-full bg-primary/15 text-primary text-[10px] font-bold px-2.5 py-0.5">
+                              Viewing
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">{r.summary}</p>
+                        <div className="mt-2.5">
+                          <table className="text-xs border border-border/60 rounded overflow-hidden">
+                            <thead>
+                              <tr className="bg-muted/40 border-b border-border/60 text-[11px] text-muted-foreground">
+                                <th className="px-3 py-1 font-medium text-left border-r border-border/40">High Risk</th>
+                                <th className="px-3 py-1 font-medium text-left border-r border-border/40">Medium Risk</th>
+                                <th className="px-3 py-1 font-medium text-left">Low Risk</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr className="bg-card/30">
+                                <td className="px-3 py-1 font-bold border-r border-border/40" style={{ color: '#d24624' }}>
+                                  {r.counts.high}
+                                </td>
+                                <td className="px-3 py-1 font-bold border-r border-border/40" style={{ color: '#f8a01a' }}>
+                                  {r.counts.medium}
+                                </td>
+                                <td className="px-3 py-1 font-bold" style={{ color: '#70964b' }}>
+                                  {r.counts.low}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            fetch(`/api/projects/${projectId}/reports/${r.id}`)
+                              .then((res) => (res.ok ? res.json() : null))
+                              .then((fullRep) => {
+                                if (fullRep) exportReportToPDF(fullRep, project?.title ?? 'Clearance Report');
+                              })
+                              .catch(() => alert('Could not export report to PDF'));
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors cursor-pointer"
+                          title="Export PDF"
+                          data-testid={`button-pdf-${r.id}`}
+                        >
+                          <Download size={13} />
+                          <span>PDF</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReportId(r.id)}
+                          className={`inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'bg-primary text-primary-foreground shadow-xs'
+                              : 'bg-muted text-foreground hover:bg-muted/80'
+                          }`}
+                          data-testid={`button-inspect-${r.id}`}
+                        >
+                          <span>{isSelected ? 'Viewing Findings' : 'Inspect Findings'}</span>
+                          <ArrowUpRight size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReportToDelete(r)}
+                          className="inline-flex items-center justify-center size-8 rounded border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/10 transition-colors cursor-pointer"
+                          title="Delete Report"
+                          data-testid={`button-delete-report-${r.id}`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 
-            {/* Findings List with Risk Filter */}
-            <section className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border px-6 py-4">
-                <div>
-                  <h2 className="text-base font-bold tracking-tight">Intellectual Property & Trademark Detections</h2>
-                  <p className="text-xs text-muted-foreground">Click any finding to inspect evidence and legal rationale</p>
-                </div>
-                <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 p-1">
-                  {['all', 'high', 'medium', 'low'].map((value) => (
+            {/* Active Selected Report Details */}
+            {detailLoading ? (
+              <LoadingScreen label="Loading report findings…" />
+            ) : currentReport ? (
+              <div className="space-y-6 pt-6 border-t border-border/80">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight text-foreground font-montserrat">
+                      Findings & Evidence: {currentReport.name || `Scan #${allReports.length - allReports.findIndex((r) => r.id === currentReport.id)}`}
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Generated {formatDate(currentReport.generatedAt)} · {currentReport.analyzedAssets} source assets reviewed
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      key={value}
-                      onClick={() => setFilter(value)}
-                      className={`rounded px-2.5 py-1 text-[9px] uppercase tracking-wider font-bold transition-colors ${
-                        filter === value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                      data-testid={`button-filter-${value}`}
+                      onClick={() => exportReportToPDF(currentReport, project?.title ?? 'Clearance Report')}
+                      className="inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/85 transition-colors cursor-pointer"
                     >
-                      {value}
+                      <Printer size={13} />
+                      <span>Export as PDF</span>
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReportToDelete(
+                          allReports.find((r) => r.id === currentReport.id) || {
+                            id: (currentReport as any).id,
+                            name: currentReport.name || 'Report',
+                            summary: currentReport.summary,
+                            generatedAt: currentReport.generatedAt,
+                            analyzedAssets: currentReport.analyzedAssets,
+                            counts: currentReport.counts,
+                          }
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete This Report</span>
+                    </button>
+                  </div>
                 </div>
+
+                {/* Risk Summary Banner */}
+                <section className="rounded-xl border border-border bg-card p-6 sm:p-7 shadow-sm">
+                  <p className="text-[clamp(1.2rem,2.5vw,1.8rem)] font-semibold leading-snug tracking-tight text-foreground">
+                    {currentReport.summary}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-4">
+                    {currentReport.counts.high > 0 && (
+                      <p className="text-sm font-semibold text-[#d24624]" data-testid="report-stat-high">
+                        {currentReport.counts.high} {currentReport.counts.high === 1 ? 'high risk reference.' : 'high risk references.'}
+                      </p>
+                    )}
+                    {currentReport.counts.medium > 0 && (
+                      <p className="text-sm font-semibold text-[#f8a01a]" data-testid="report-stat-medium">
+                        {currentReport.counts.medium} {currentReport.counts.medium === 1 ? 'Medium risk reference.' : 'Medium risk references.'}
+                      </p>
+                    )}
+                    {currentReport.counts.low > 0 && (
+                      <p className="text-sm font-semibold text-[#70964b]" data-testid="report-stat-low">
+                        {currentReport.counts.low} {currentReport.counts.low === 1 ? 'Low risk reference.' : 'Low risk references.'}
+                      </p>
+                    )}
+                  </div>
+                </section>
+
+                {/* Findings List with Risk Filter */}
+                <section className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border px-6 py-4">
+                    <div>
+                      <h2 className="text-base font-bold tracking-tight">Intellectual Property & Trademark Detections</h2>
+                      <p className="text-xs text-muted-foreground">Click any finding to inspect evidence and legal rationale</p>
+                    </div>
+                    <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 p-1">
+                      {['all', 'high', 'medium', 'low'].map((value) => (
+                        <button
+                          type="button"
+                          key={value}
+                          onClick={() => setFilter(value)}
+                          className={`rounded px-2.5 py-1 text-[9px] uppercase tracking-wider font-bold transition-colors ${
+                            filter === value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                          data-testid={`button-filter-${value}`}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {filtered.length === 0 ? (
+                    <div className="p-12 text-center text-sm text-muted-foreground">No detections in this filter view.</div>
+                  ) : (
+                    <div className="px-6 py-2">
+                      {filtered.map((detection, index) => (
+                        <DetectionRow
+                          detection={detection}
+                          previews={currentReport.previews}
+                          index={index}
+                          key={detection.id}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {/* Agent Reasoning Panel */}
+                <AgentReasoningPanel toolCalls={(currentReport as any).toolCalls} />
               </div>
-
-              {filtered.length === 0 ? (
-                <div className="p-12 text-center text-sm text-muted-foreground">No detections in this filter view.</div>
-              ) : (
-                <div className="px-6 py-2">
-                  {filtered.map((detection, index) => (
-                    <DetectionRow
-                      detection={detection}
-                      previews={reportQuery.data.previews}
-                      index={index}
-                      key={detection.id}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Agent Reasoning Panel */}
-            <AgentReasoningPanel toolCalls={(reportQuery.data as any).toolCalls} />
+            ) : null}
           </div>
         )}
       </div>
 
       <ConfirmModal
-        isOpen={showDeleteReportModal}
+        isOpen={Boolean(reportToDelete)}
         title="Delete Clearance Report"
-        description="Are you sure you want to permanently delete this production clearance report from ClickHouse? You will be redirected back to the workspace."
+        description={`Are you sure you want to permanently delete "${reportToDelete?.name ?? 'this report'}" from ClickHouse? This action cannot be undone.`}
         confirmLabel="Delete Report"
         loading={isDeletingReport}
         onConfirm={executeDeleteReport}
-        onCancel={() => setShowDeleteReportModal(false)}
+        onCancel={() => setReportToDelete(null)}
       />
     </div>
   );
@@ -2842,15 +3056,18 @@ function AnalyticsPage() {
             <p className="mt-1 text-xs text-muted-foreground">
               Real-time aggregation across all clearance projects powered by ClickHouse Cloud
             </p>
+            <div className="mt-3.5">
+              <button
+                type="button"
+                onClick={() => setLocation('/')}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
+                data-testid="button-back-workspace-analytics"
+              >
+                <ArrowLeft size={14} />
+                <span>Back to Workspace</span>
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setLocation('/')}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors self-start sm:self-auto"
-          >
-            <ArrowLeft size={14} />
-            <span>Back to Workspace</span>
-          </button>
         </div>
       </header>
 
