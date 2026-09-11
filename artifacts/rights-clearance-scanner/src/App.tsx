@@ -283,6 +283,7 @@ function Shell({
           <div className="pb-3.5 mb-4 border-b border-sidebar-border/40">
             <Link
               href="/"
+              onClick={() => onSelectProject('')}
               className="inline-flex items-center gap-2.5 group cursor-pointer"
               title="Return to RightScan Workspace"
             >
@@ -297,56 +298,71 @@ function Shell({
             </Link>
           </div>
 
-          {/* Workspace Name */}
+          {/* Workspace Name (Clickable to return to Workspace Homepage) */}
           <div className="pb-4 border-b border-sidebar-border/40">
-            <span className="block truncate text-sm font-bold tracking-tight text-sidebar-foreground">
-              {workspaceTitle}
-            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onSelectProject('');
+                if (location !== '/') setLocation('/');
+              }}
+              className="w-full text-left group flex items-center justify-between gap-1.5 focus:outline-none cursor-pointer"
+              title="Return to Workspace Homepage"
+              data-testid="button-workspace-home"
+            >
+              <span className="block truncate text-sm font-bold tracking-tight text-sidebar-foreground group-hover:text-sidebar-primary transition-colors">
+                {workspaceTitle}
+              </span>
+            </button>
           </div>
 
-          {/* Project Picker in Left Bar */}
-          <SidebarProjectPicker
-            projects={projects}
-            selectedId={selectedId}
-            onSelect={(id) => {
-              onSelectProject(id);
-              if (location !== '/') setLocation('/');
-            }}
-            onCreated={(newProj) => {
-              onSelectProject(newProj.id);
-              queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
-              if (location !== '/') setLocation('/');
-            }}
-          />
+          {/* Project Picker and Navigation Links (Only visible when a project is selected) */}
+          {selectedId && (
+            <>
+              <SidebarProjectPicker
+                projects={projects}
+                selectedId={selectedId}
+                onSelect={(id) => {
+                  onSelectProject(id);
+                  if (location !== '/') setLocation('/');
+                }}
+                onCreated={(newProj) => {
+                  onSelectProject(newProj.id);
+                  queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+                  if (location !== '/') setLocation('/');
+                }}
+              />
 
-          {/* Navigation Links */}
-          <nav className="mt-6 space-y-1.5">
-            <Link
-              href={selectedId ? `/report/${selectedId}` : '/reports'}
-              className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-xs font-medium transition-colors ${
-                isReport || isReportsList
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
-              }`}
-              data-testid="link-reports"
-            >
-              <FileText size={15} />
-              <span>Reports</span>
-            </Link>
+              {/* Navigation Links */}
+              <nav className="mt-6 space-y-1.5">
+                <Link
+                  href={`/report/${selectedId}`}
+                  className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-xs font-medium transition-colors ${
+                    isReport || isReportsList
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
+                  }`}
+                  data-testid="link-reports"
+                >
+                  <FileText size={15} />
+                  <span>Reports</span>
+                </Link>
 
-            <Link
-              href="/analytics"
-              className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-xs font-medium transition-colors ${
-                isAnalytics
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
-              }`}
-              data-testid="link-analytics"
-            >
-              <BarChart3 size={15} />
-              <span>Analytics</span>
-            </Link>
-          </nav>
+                <Link
+                  href="/analytics"
+                  className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-xs font-medium transition-colors ${
+                    isAnalytics
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
+                  }`}
+                  data-testid="link-analytics"
+                >
+                  <BarChart3 size={15} />
+                  <span>Analytics</span>
+                </Link>
+              </nav>
+            </>
+          )}
         </div>
 
         {/* User Account / Session Footer */}
@@ -1103,6 +1119,312 @@ function ClearanceAgentTerminal({
   );
 }
 
+// ─── Workspace Homepage (No Project Selected) ──────────────────────────────
+
+function WorkspaceHomepage({
+  projects,
+  onSelectProject,
+}: {
+  projects: Project[];
+  onSelectProject: (id: string) => void;
+}) {
+  const { user } = useAuth();
+  const createProject = useCreateProject();
+  const queryClient = useQueryClient();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [dropdownOpen]);
+
+  // Projects sorted starting with most recent created one
+  const sortedProjects = useMemo(() => {
+    return [...projects].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [projects]);
+
+  // Three most recent worked projects
+  const recentProjects = useMemo(() => {
+    return sortedProjects.slice(0, 3);
+  }, [sortedProjects]);
+
+  const handleCreate = () => {
+    if (!newTitle.trim() || createProject.isPending) return;
+    createProject.mutate(
+      { data: { title: newTitle.trim() } },
+      {
+        onSuccess: (newProj) => {
+          setNewTitle('');
+          setShowCreateModal(false);
+          queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+          onSelectProject(newProj.id);
+        },
+      }
+    );
+  };
+
+  const getMediaThumbnail = (proj: Project) => {
+    if (!proj.assets || proj.assets.length === 0) return null;
+    const media = proj.assets.find(
+      (a) => (a.type === 'image' || a.type === 'video') && a.previewDataUrl
+    );
+    return media?.previewDataUrl ?? null;
+  };
+
+  return (
+    <div className="mx-auto max-w-[1280px] px-5 py-10 sm:px-8 lg:px-12">
+      {/* Welcome Header */}
+      <div className="mb-10 text-left">
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground font-montserrat">
+          Welcome to your workspace {user?.username ? `${user.username}!` : '!'}
+        </h1>
+        <p className="mt-2 text-base text-muted-foreground">
+          Select a project to get started.
+        </p>
+
+        {/* Dropdown Menu & New Project Action */}
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <div ref={dropdownRef} className="relative min-w-[280px] sm:min-w-[360px]">
+            <button
+              type="button"
+              onClick={() => setDropdownOpen((v) => !v)}
+              className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left text-sm font-medium shadow-sm hover:border-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+              data-testid="button-homepage-project-dropdown"
+            >
+              <div className="flex items-center gap-2.5 truncate">
+                <FolderOpen size={18} className="text-primary shrink-0" />
+                <span className="truncate text-foreground font-semibold">
+                  {projects.length > 0 ? 'Choose a project…' : 'No projects created yet'}
+                </span>
+              </div>
+              <ChevronDown
+                size={16}
+                className={`shrink-0 text-muted-foreground transition-transform duration-200 ${
+                  dropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-lg border border-border bg-card p-1.5 shadow-xl fade-up max-h-72 overflow-y-auto divide-y divide-border/40">
+                {sortedProjects.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-muted-foreground">
+                    No production slates found.
+                  </div>
+                ) : (
+                  sortedProjects.map((p) => {
+                    const thumb = getMediaThumbnail(p);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          onSelectProject(p.id);
+                        }}
+                        className="flex w-full items-center justify-between gap-3 p-2.5 rounded-md text-left hover:bg-muted/60 transition-colors group cursor-pointer"
+                        data-testid={`option-homepage-project-${p.id}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="size-9 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/60">
+                            {thumb ? (
+                              <img src={thumb} alt="" className="size-full object-cover" />
+                            ) : (
+                              <Film size={16} className="text-muted-foreground/60" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                              {p.title}
+                            </span>
+                            <span className="block text-[11px] text-muted-foreground">
+                              Created {formatDate(p.createdAt)} · {p.assetCount} {p.assetCount === 1 ? 'asset' : 'assets'}
+                            </span>
+                          </div>
+                        </div>
+                        <ArrowUpRight size={14} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Quick New Project Button */}
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-all cursor-pointer"
+            data-testid="button-homepage-new-project"
+          >
+            <Plus size={16} />
+            <span>New Project</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Recent Projects Section */}
+      <div className="mt-12 border-t border-border/60 pt-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground font-montserrat">
+            Recent projects
+          </h2>
+          {sortedProjects.length > 0 && (
+            <span className="text-xs text-muted-foreground font-medium">
+              Showing {recentProjects.length} of {sortedProjects.length}
+            </span>
+          )}
+        </div>
+
+        {recentProjects.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border p-12 text-center bg-card/40">
+            <Film size={44} className="mx-auto text-muted-foreground/50 mb-3" />
+            <h3 className="text-base font-semibold text-foreground">No recent projects</h3>
+            <p className="mt-1.5 text-xs text-muted-foreground max-w-sm mx-auto">
+              Create your first production slate to upload scripts, stills, and clips for automated clearance inspection.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="mt-5 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Create Project Slate</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {recentProjects.map((p) => {
+              const thumbnail = getMediaThumbnail(p);
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => onSelectProject(p.id)}
+                  className="group flex flex-col overflow-hidden rounded-xl border border-border/80 bg-card hover:border-primary/60 hover:shadow-md transition-all cursor-pointer"
+                  data-testid={`card-recent-project-${p.id}`}
+                >
+                  {/* Media Thumbnail or Generic Video/Reel Icon */}
+                  <div className="relative aspect-video w-full overflow-hidden bg-muted/40 border-b border-border/60 flex items-center justify-center">
+                    {thumbnail ? (
+                      <img
+                        src={thumbnail}
+                        alt={p.title}
+                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground/50 group-hover:text-primary transition-colors">
+                        <Film size={40} className="stroke-[1.5]" />
+                        <span className="text-[10px] tracking-wider uppercase font-semibold">No media attached</span>
+                      </div>
+                    )}
+                    <span
+                      className={`absolute top-2.5 right-2.5 rounded-full px-2.5 py-0.5 text-[10px] font-semibold backdrop-blur-md shadow-sm ${
+                        p.reportStatus === 'ready'
+                          ? 'bg-emerald-500/90 text-white'
+                          : 'bg-zinc-800/80 text-zinc-300'
+                      }`}
+                    >
+                      {p.reportStatus === 'ready' ? 'Report Ready' : 'Not Started'}
+                    </span>
+                  </div>
+
+                  {/* Card Content */}
+                  <div className="flex flex-1 flex-col justify-between p-5">
+                    <div>
+                      <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors truncate font-montserrat">
+                        {p.title}
+                      </h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Created {formatDate(p.createdAt)}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 pt-3.5 border-t border-border/60 flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        {p.assetCount} {p.assetCount === 1 ? 'asset' : 'assets'} · {p.detectionCount} {p.detectionCount === 1 ? 'finding' : 'findings'}
+                      </span>
+                      <span className="font-semibold text-primary inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                        <span>Open</span>
+                        <ArrowUpRight size={13} />
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Modal for Creating a New Project */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl fade-up">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <h3 className="text-base font-bold text-foreground font-montserrat">Create Production Slate</h3>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="mt-4">
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
+                Project Title
+              </label>
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                placeholder="e.g. Fast & Furious Clearance Slate"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                autoFocus
+              />
+            </div>
+            <div className="mt-6 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={!newTitle.trim() || createProject.isPending}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+              >
+                {createProject.isPending && <LoaderCircle size={13} className="animate-spin" />}
+                <span>Create Slate</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Home / Workspace View ─────────────────────────────────────────────────
 
 function Home({
@@ -1378,6 +1700,11 @@ function Home({
       {/* If guest / not logged in, display the full Retro Film Landing & Auth Hero */}
       {!user ? (
         <RetroLandingHero />
+      ) : !selectedProject ? (
+        <WorkspaceHomepage
+          projects={projects}
+          onSelectProject={(id) => setSelectedId(id)}
+        />
       ) : (
         /* Authenticated: Inside the Project Workspace */
         <div className="mx-auto max-w-[1380px] px-5 py-8 sm:px-8 lg:px-12">
@@ -1389,22 +1716,20 @@ function Home({
                   {!isEditingTitle ? (
                     <div className="flex items-center gap-2.5 mt-1">
                       <h2 className="text-2xl font-bold tracking-tight text-foreground truncate font-montserrat">
-                        {selectedProject ? selectedProject.title : 'Select or Create a Project to Start'}
+                        {selectedProject.title}
                       </h2>
-                      {selectedProject && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditTitleValue(selectedProject.title);
-                            setIsEditingTitle(true);
-                          }}
-                          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded transition-colors"
-                          title="Rename project"
-                          data-testid="button-edit-project-title"
-                        >
-                          <Edit3 size={15} />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditTitleValue(selectedProject.title);
+                          setIsEditingTitle(true);
+                        }}
+                        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded transition-colors cursor-pointer"
+                        title="Rename project"
+                        data-testid="button-edit-project-title"
+                      >
+                        <Edit3 size={15} />
+                      </button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -1424,7 +1749,7 @@ function Home({
                         type="button"
                         onClick={handleRenameProject}
                         disabled={renaming || !editTitleValue.trim()}
-                        className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/85 transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/85 transition-colors disabled:opacity-50 cursor-pointer"
                         data-testid="button-save-project-title"
                       >
                         {renaming ? <LoaderCircle size={13} className="animate-spin" /> : <Check size={13} />}
@@ -1434,39 +1759,25 @@ function Home({
                         type="button"
                         onClick={() => setIsEditingTitle(false)}
                         disabled={renaming}
-                        className="rounded border border-border p-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        className="rounded border border-border p-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                       >
                         <X size={13} />
                       </button>
                     </div>
                   )}
-                  {selectedProject && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Created {formatDate(selectedProject.createdAt)}
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Created {formatDate(selectedProject.createdAt)}
+                  </p>
                 </div>
 
-                {selectedProject && (
-                  <div className="flex flex-col sm:items-end text-sm text-foreground space-y-0.5 shrink-0 self-start sm:self-center font-medium">
-                    <span>Assets: {selectedProject.assetCount}</span>
-                    <span>Findings: {selectedProject.detectionCount}</span>
-                  </div>
-                )}
+                <div className="flex flex-col sm:items-end text-sm text-foreground space-y-0.5 shrink-0 self-start sm:self-center font-medium">
+                  <span>Assets: {selectedProject.assetCount}</span>
+                  <span>Findings: {selectedProject.detectionCount}</span>
+                </div>
               </div>
 
-            {!selectedProject ? (
-              <div className="scan-grid mt-8 rounded-lg p-10 text-center border border-dashed border-border sm:p-14">
-                <FolderOpen size={30} className="mx-auto text-muted-foreground" />
-                <h3 className="mt-3 font-semibold text-base">Select a project from the left sidebar</h3>
-                <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-                  Pick an existing production or create a new project slate on the left to begin uploading clearance assets.
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Upload Section */}
-                <div className="mt-6">
+              {/* Upload Section */}
+              <div className="mt-6">
                   <div className="mb-3">
                     <h2 className="text-xl font-bold tracking-tight font-montserrat text-foreground">
                       Upload Assets
@@ -1750,11 +2061,9 @@ function Home({
                     )}
                   </div>
                 </div>
-              </>
-            )}
-          </section>
+            </section>
+          </div>
         </div>
-      </div>
       )}
       <ConfirmModal
         isOpen={Boolean(assetPendingDelete)}
@@ -2855,11 +3164,8 @@ function AppShellWithState() {
   const [selectedId, setSelectedId] = useState<string>();
 
   useEffect(() => {
-    if (!selectedId && projects[0]) {
-      setSelectedId(projects[0].id);
-    }
     if (selectedId && projects.length > 0 && !projects.some((p) => p.id === selectedId)) {
-      setSelectedId(projects[0].id);
+      setSelectedId(undefined);
     }
   }, [projects, selectedId]);
 
@@ -2867,21 +3173,21 @@ function AppShellWithState() {
     <Shell
       projects={projects}
       selectedId={selectedId}
-      onSelectProject={(id) => setSelectedId(id)}
+      onSelectProject={(id) => setSelectedId(id ? id : undefined)}
     >
       <Switch>
         <Route path="/">
           <Home
             projects={projects}
             selectedId={selectedId}
-            setSelectedId={setSelectedId}
+            setSelectedId={(id) => setSelectedId(id ? id : undefined)}
           />
         </Route>
         <Route path="/reports">
           <ReportsDirectoryPage
             projects={projects}
             selectedId={selectedId}
-            onSelectProject={(id) => setSelectedId(id)}
+            onSelectProject={(id) => setSelectedId(id ? id : undefined)}
           />
         </Route>
         <Route path="/report/:projectId" component={ReportPage} />
