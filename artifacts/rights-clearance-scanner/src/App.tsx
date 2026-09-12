@@ -631,7 +631,7 @@ function ConfirmModal({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-md bg-[#7a1212] hover:bg-[#5e0c0c] border border-[#5e0c0c] px-3.5 py-1.5 text-xs font-bold text-white/90 shadow transition-all disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-md bg-[#7a1212] hover:bg-[#5e0c0c] px-3.5 py-1.5 text-xs font-bold text-white/90 shadow transition-all disabled:opacity-50 cursor-pointer"
           >
             {loading && <LoaderCircle size={13} className="animate-spin text-white/90" />}
             <span>{confirmLabel}</span>
@@ -901,7 +901,7 @@ function ProjectReportsSection({
                   type="button"
                   onClick={() => setReportPendingDelete(r.id)}
                   disabled={deletingReportId === r.id}
-                  className="inline-flex items-center justify-center size-8 rounded bg-red-600 hover:bg-red-700 text-white shadow-xs transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center size-8 rounded bg-[#7a1212] hover:bg-[#5e0c0c] text-white shadow-xs transition-colors cursor-pointer"
                   title="Delete Report"
                   data-testid={`button-delete-report-${r.id}`}
                 >
@@ -2022,7 +2022,7 @@ function Home({
                       <button
                         type="button"
                         onClick={() => setConfirmDelete(true)}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-[#7a1212] hover:bg-[#5e0c0c] border border-[#5e0c0c] px-3.5 py-2 text-xs font-semibold text-white/80 shadow-sm transition-all self-start sm:self-center cursor-pointer"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-[#7a1212] hover:bg-[#5e0c0c] px-3.5 py-2 text-xs font-semibold text-white/80 shadow-sm transition-all self-start sm:self-center cursor-pointer"
                         data-testid="button-trigger-delete-project"
                       >
                         <Trash2 size={13} className="text-white/80" />
@@ -2035,7 +2035,7 @@ function Home({
                           type="button"
                           onClick={handleDeleteProject}
                           disabled={deleting}
-                          className="inline-flex items-center gap-1.5 rounded-md bg-[#7a1212] hover:bg-[#5e0c0c] border border-[#5e0c0c] px-3.5 py-2 text-xs font-bold text-white/80 shadow transition-all disabled:opacity-50 cursor-pointer"
+                          className="inline-flex items-center gap-1.5 rounded-md bg-[#7a1212] hover:bg-[#5e0c0c] px-3.5 py-2 text-xs font-bold text-white/80 shadow transition-all disabled:opacity-50 cursor-pointer"
                           data-testid="button-confirm-delete-project"
                         >
                           {deleting ? (
@@ -2311,7 +2311,7 @@ function ReportPage() {
                         <button
                           type="button"
                           onClick={() => setReportToDelete(r)}
-                          className="inline-flex items-center justify-center size-8 rounded bg-red-600 hover:bg-red-700 text-white shadow-xs transition-colors cursor-pointer"
+                          className="inline-flex items-center justify-center size-8 rounded bg-[#7a1212] hover:bg-[#5e0c0c] text-white shadow-xs transition-colors cursor-pointer"
                           title="Delete Report"
                           data-testid={`button-delete-report-${r.id}`}
                         >
