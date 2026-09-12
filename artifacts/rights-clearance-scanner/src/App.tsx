@@ -379,8 +379,12 @@ function Shell({
               </div>
               <button
                 type="button"
-                onClick={logout}
-                className="p-1.5 text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                onClick={() => {
+                  onSelectProject('');
+                  setLocation('/');
+                  logout();
+                }}
+                className="p-1.5 text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 rounded transition-colors cursor-pointer"
                 title="Sign Out"
                 data-testid="button-signout"
               >
@@ -407,8 +411,9 @@ function Shell({
 
 // ─── Retro Film Landing & Auth Section ─────────────────────────────────────
 
-function RetroLandingHero() {
+function RetroLandingHero({ onLoggedIn }: { onLoggedIn?: () => void }) {
   const { login, register, startDemo, loading } = useAuth();
+  const [, setLocation] = useLocation();
   const [authMode, setAuthMode] = useState<'demo' | 'signin' | 'register'>('demo');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -421,14 +426,20 @@ function RetroLandingHero() {
       if (authMode === 'demo') {
         await startDemo();
         await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+        onLoggedIn?.();
+        setLocation('/');
       } else if (authMode === 'signin') {
         if (!username || !password) throw new Error('Please enter username and password');
         await login(username, password);
         await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+        onLoggedIn?.();
+        setLocation('/');
       } else if (authMode === 'register') {
         if (!username || !password) throw new Error('Please enter username and password');
         await register(username, password);
         await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+        onLoggedIn?.();
+        setLocation('/');
       }
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Authentication failed');
@@ -553,9 +564,11 @@ function RetroLandingHero() {
                     data-testid="input-auth-password"
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  {authMode === 'register' ? '✓ Studio accounts receive 400 MB file upload limit.' : '✓ Access your saved productions & ClickHouse reports.'}
-                </p>
+                {authMode === 'register' && (
+                  <p className="text-[11px] text-muted-foreground">
+                    ✓ Studio accounts receive 400 MB file upload limit.
+                  </p>
+                )}
                 <button
                   type="submit"
                   disabled={loading}
@@ -1616,8 +1629,7 @@ function Home({
       });
       if (!res.ok) throw new Error('Failed to delete project');
       await queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
-      const remaining = projects.filter((p) => p.id !== selectedId);
-      setSelectedId(remaining[0]?.id ?? '');
+      setSelectedId('');
       setConfirmDelete(false);
     } catch (err) {
       alert(getErrorMessage(err, 'Could not delete project'));
@@ -1726,7 +1738,11 @@ function Home({
     <div className="min-h-[100dvh]">
       {/* If guest / not logged in, display the full Retro Film Landing & Auth Hero */}
       {!user ? (
-        <RetroLandingHero />
+        <RetroLandingHero
+          onLoggedIn={() => {
+            setSelectedId('');
+          }}
+        />
       ) : !selectedProject ? (
         <WorkspaceHomepage
           projects={projects}
@@ -3373,6 +3389,11 @@ function AppShellWithState() {
 
   const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
   const [selectedId, setSelectedId] = useState<string>();
+
+  // Always reset selected project whenever auth user changes (login, logout, account switch)
+  useEffect(() => {
+    setSelectedId(undefined);
+  }, [user?.id]);
 
   useEffect(() => {
     if (selectedId && projects.length > 0 && !projects.some((p) => p.id === selectedId)) {
