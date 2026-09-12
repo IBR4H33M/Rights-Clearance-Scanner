@@ -59,8 +59,8 @@ export function exportReportToPDF(report: Report & { name?: string }, projectTit
         d.confidence * 100
       )}%
         </div>
-        <div style="margin-top: 6px; background: #f9fafb; padding: 8px 10px; border-left: 3px solid #d1d5db; font-size: 12px; font-style: italic; color: #374151;">
-          "${d.contextSnippet}"
+        <div style="margin-top: 6px; font-size: 12px; color: #000000; font-weight: 500;">
+          ${(d.contextSnippet || '').replace(/^["“']|["”']$/g, '')}
         </div>
         <div style="margin-top: 6px; font-size: 12px; color: #1f2937;">
           <strong>Legal Rationale:</strong> ${d.rationale}
@@ -222,7 +222,7 @@ export function exportReportToPDF(report: Report & { name?: string }, projectTit
         </div>
 
         <h3 style="font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #111827; padding-bottom: 4px; margin-top: 24px; margin-bottom: 10px;">
-          Detailed Intellectual Property & Trademark Findings
+          Detailed Clearance Flags & Findings
         </h3>
 
         ${

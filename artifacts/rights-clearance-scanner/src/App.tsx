@@ -613,14 +613,9 @@ function ConfirmModal({
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-start gap-3.5">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive border border-destructive/30">
-            <Trash2 size={18} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-bold tracking-tight text-foreground">{title}</h3>
-            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{description}</p>
-          </div>
+        <div>
+          <h3 className="text-sm font-bold tracking-tight text-foreground">{title}</h3>
+          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{description}</p>
         </div>
 
         <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border/50">
@@ -638,11 +633,7 @@ function ConfirmModal({
             disabled={loading}
             className="inline-flex items-center gap-1.5 rounded-md bg-[#7a1212] hover:bg-[#5e0c0c] border border-[#5e0c0c] px-3.5 py-1.5 text-xs font-bold text-white/90 shadow transition-all disabled:opacity-50 cursor-pointer"
           >
-            {loading ? (
-              <LoaderCircle size={13} className="animate-spin text-white/90" />
-            ) : (
-              <Trash2 size={13} className="text-white/90" />
-            )}
+            {loading && <LoaderCircle size={13} className="animate-spin text-white/90" />}
             <span>{confirmLabel}</span>
           </button>
         </div>
@@ -910,14 +901,14 @@ function ProjectReportsSection({
                   type="button"
                   onClick={() => setReportPendingDelete(r.id)}
                   disabled={deletingReportId === r.id}
-                  className="inline-flex items-center justify-center size-8 rounded border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/10 transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center size-8 rounded bg-red-600 hover:bg-red-700 text-white shadow-xs transition-colors cursor-pointer"
                   title="Delete Report"
                   data-testid={`button-delete-report-${r.id}`}
                 >
                   {deletingReportId === r.id ? (
-                    <LoaderCircle size={13} className="animate-spin text-destructive" />
+                    <LoaderCircle size={13} className="animate-spin text-white" />
                   ) : (
-                    <Trash2 size={13} />
+                    <Trash2 size={13} className="text-white" />
                   )}
                 </button>
               </div>
@@ -2203,19 +2194,6 @@ function ReportPage() {
             </div>
           </div>
 
-          {currentReport && (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => exportReportToPDF(currentReport, project?.title ?? 'Clearance Report')}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/85 transition-colors cursor-pointer"
-                data-testid="button-export-pdf"
-              >
-                <Printer size={14} />
-                <span>Export Active as PDF</span>
-              </button>
-            </div>
-          )}
         </div>
       </header>
 
@@ -2333,11 +2311,11 @@ function ReportPage() {
                         <button
                           type="button"
                           onClick={() => setReportToDelete(r)}
-                          className="inline-flex items-center justify-center size-8 rounded border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/10 transition-colors cursor-pointer"
+                          className="inline-flex items-center justify-center size-8 rounded bg-red-600 hover:bg-red-700 text-white shadow-xs transition-colors cursor-pointer"
                           title="Delete Report"
                           data-testid={`button-delete-report-${r.id}`}
                         >
-                          <Trash2 size={13} />
+                          <Trash2 size={13} className="text-white" />
                         </button>
                       </div>
                     </div>
@@ -2368,19 +2346,6 @@ function ReportPage() {
                     >
                       <Printer size={13} />
                       <span>Export as PDF</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const target = allReports.find((r) => r.id === selectedReportId);
-                        if (target) {
-                          setReportToDelete(target);
-                        }
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors cursor-pointer"
-                    >
-                      <Trash2 size={13} />
-                      <span>Delete This Report</span>
                     </button>
                   </div>
                 </div>
@@ -2413,7 +2378,7 @@ function ReportPage() {
                 <section className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border px-6 py-4">
                     <div>
-                      <h2 className="text-base font-bold tracking-tight">Intellectual Property & Trademark Detections</h2>
+                      <h2 className="text-base font-bold tracking-tight font-montserrat">Clearance Flags & Findings</h2>
                       <p className="text-xs text-muted-foreground">Click any finding to inspect evidence and legal rationale</p>
                     </div>
                     <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 p-1">
@@ -2653,9 +2618,9 @@ function VideoFrameSnippet({
 
   return (
     <div className="mb-4">
-      {/* Snippet Photo Frame */}
+      {/* Snippet Photo Frame with sharp corners */}
       <div
-        className="relative max-w-[440px] overflow-hidden rounded-md border border-white/20 bg-black shadow-sm flex items-center justify-center"
+        className="relative max-w-[440px] overflow-hidden rounded-none border border-white/20 bg-black shadow-sm flex items-center justify-center"
         style={{ aspectRatio: aspectRatio || '16 / 9' }}
       >
         {cloudinaryThumbnailUrl && !imageFailed ? (
@@ -2732,27 +2697,27 @@ function EvidencePreview({
     }
 
     return (
-      <div className="mb-4 rounded-lg border border-white/15 bg-black/30 p-4 shadow-sm">
+      <div className="mb-4 rounded-none border border-white/15 bg-black/30 p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3 pb-2.5 mb-2.5 border-b border-white/10">
           <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded bg-white/10 text-white">
+            <span className="p-1.5 rounded-none bg-white/10 text-white">
               <Volume2 size={15} />
             </span>
             <span className="text-xs font-bold uppercase tracking-wider text-white">
               Audio Dialogue & Subtitles
             </span>
           </div>
-          <span className="inline-flex items-center rounded-md bg-black px-2.5 py-1 text-xs font-bold text-white">
+          <span className="inline-flex items-center rounded-none bg-black px-2.5 py-1 text-xs font-bold text-white">
             <span>Timestamp: {timeInfo.timeStr}</span>
           </span>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider opacity-75 font-semibold mb-1">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
             Spoken Subtitle Text:
           </p>
-          <blockquote className="rounded-md bg-black/40 p-3 text-sm italic leading-relaxed text-white font-medium">
-            &ldquo;{cleanSubtitle}&rdquo;
-          </blockquote>
+          <p className="text-sm sm:text-base leading-relaxed text-black font-medium">
+            {cleanSubtitle.replace(/^["“']|["”']$/g, '')}
+          </p>
         </div>
         {preview?.filename && (
           <p className="mt-2 text-[10px] opacity-70">
@@ -2792,7 +2757,7 @@ function EvidencePreview({
         )}
       </div>
       <div
-        className="relative max-w-[440px] overflow-hidden rounded-md border border-white/20 bg-black shadow-sm"
+        className="relative max-w-[440px] overflow-hidden rounded-none border border-white/20 bg-black shadow-sm"
         style={preview.width > 0 && preview.height > 0 ? { aspectRatio: `${preview.width} / ${preview.height}` } : { aspectRatio: '16 / 9' }}
       >
         <img
@@ -2884,7 +2849,7 @@ function DetectionRow({
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <div
-            className={`w-36 h-7 flex items-center justify-center text-center text-xs font-semibold text-white tracking-wide shadow-sm ${riskSolidBg}`}
+            className={`w-36 h-7 flex items-center justify-center text-center text-xs font-semibold text-white tracking-wide shadow-none pointer-events-none select-none transition-none ${riskSolidBg}`}
           >
             Risk level : {riskLabel}
           </div>
@@ -2900,12 +2865,12 @@ function DetectionRow({
           <div>
             <EvidencePreview detection={detection} preview={preview} index={index} />
             {detection.contextSnippet && (
-              <>
-                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold mb-1">Context</p>
-                <p className="text-xs leading-relaxed italic p-3 rounded-md bg-muted/40 border border-border text-foreground mb-3">
-                  &ldquo;{detection.contextSnippet}&rdquo;
+              <div className="mb-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-1">Context</p>
+                <p className="text-sm sm:text-base leading-relaxed text-black font-medium">
+                  {detection.contextSnippet.replace(/^["“']|["”']$/g, '')}
                 </p>
-              </>
+              </div>
             )}
 
             {/* Attributes table */}
