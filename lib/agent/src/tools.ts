@@ -262,6 +262,7 @@ Limit to 25 objects.`,
 export async function transcribeAndFlagDialogue(args: {
   video_base64: string;
   mime_type: string;
+  asset_url?: string;
 }): Promise<{
   mentions: Array<{
     name: string;
@@ -273,6 +274,32 @@ export async function transcribeAndFlagDialogue(args: {
   }>;
 }> {
   const ai = getAI();
+
+  let audioBase64 = args.video_base64;
+  let audioMimeType = args.mime_type;
+
+  // For Cloudinary videos, fetch the extracted audio MP3 stream directly if available
+  // This keeps the payload under 1MB instead of sending heavy video files to Gemini
+  if (
+    args.asset_url &&
+    args.asset_url.includes("cloudinary.com") &&
+    (args.mime_type.startsWith("video/") || args.asset_url.includes("/video/upload/"))
+  ) {
+    try {
+      const audioUrl = args.asset_url.replace(/\.[a-zA-Z0-9]+$/, ".mp3");
+      const aRes = await fetch(audioUrl);
+      if (aRes.ok) {
+        const buf = await aRes.arrayBuffer();
+        if (buf.byteLength > 0 && buf.byteLength < 20 * 1024 * 1024) {
+          audioBase64 = Buffer.from(buf).toString("base64");
+          audioMimeType = "audio/mp3";
+        }
+      }
+    } catch (e) {
+      console.warn("[transcribeAndFlagDialogue] Could not fetch Cloudinary mp3 audio, using video payload:", e);
+    }
+  }
+
   const response = await ai.models.generateContent({
     model: MODEL,
     contents: [
@@ -280,20 +307,30 @@ export async function transcribeAndFlagDialogue(args: {
         role: "user",
         parts: [
           {
-            text: `You are a dialogue rights-clearance agent. Transcribe spoken dialogue in this audio/video track and identify any mentions of brand names, celebrity names, song titles, or copyrighted works.
+            text: `You are an expert audio rights-clearance and dialogue transcription agent. Listen carefully to the audio track of this media.
+Transcribe all spoken dialogue, speech, character lines, and lyrics.
+Identify ANY third-party brand names, company names, vehicle makes or models (such as Ferrari, Ford, Porsche, Lamborghini, etc.), celebrity names, song titles, or copyrighted intellectual property spoken, referenced, or sung in the audio track.
 
-Return a JSON array. Each item must have:
-- name: the entity mentioned
-- category: "brand" | "celebrity_name" | "song" | "existing_ip"
-- timestamp: approximate timestamp (e.g. "00:04", "0:15") or "throughout"
-- context_snippet: the EXACT verbatim spoken words/subtitle uttered by the speaker in the audio containing the mention (e.g. "I'm driving the Ferrari to the party"). NEVER provide a summary or meta-description like "Spoken dialogue mentioning Ferrari in the scene", you MUST transcribe the exact subtitle text uttered.
-- confidence: 0.0-1.0
-- sentiment: "positive" | "neutral" | "negative"`,
+Even if the mention is brief, quiet, fast, or in casual conversation, YOU MUST DETECT IT.
+
+Return a JSON array of findings:
+[
+  {
+    "name": "Exact brand or entity name (e.g. Ferrari)",
+    "category": "brand" | "celebrity_name" | "song" | "existing_ip",
+    "timestamp": "MM:SS timestamp where it is spoken (e.g. 00:04)",
+    "context_snippet": "The spoken sentence or dialogue line containing the mention",
+    "confidence": 0.95,
+    "sentiment": "positive" | "neutral" | "negative"
+  }
+]
+
+Return [] ONLY if there are absolutely no third-party brand, celebrity, or IP mentions anywhere in the audio track.`,
           },
           {
             inlineData: {
-              mimeType: args.mime_type,
-              data: args.video_base64,
+              mimeType: audioMimeType,
+              data: audioBase64,
             },
           },
         ],
@@ -302,16 +339,18 @@ Return a JSON array. Each item must have:
     config: { responseMimeType: "application/json" },
   });
 
-  const mentions = parseJsonResponse<
-    Array<{
-      name: string;
-      category: string;
-      timestamp: string;
-      context_snippet: string;
-      confidence: number;
-      sentiment: string;
-    }>
-  >(response.text ?? "[]", []);
+  const rawMentions = parseJsonResponse<any[]>(response.text ?? "[]", []);
+  const mentions = (Array.isArray(rawMentions) ? rawMentions : [])
+    .map((m) => ({
+      name: String(m.name || m.label || m.entity || "").trim(),
+      category: String(m.category || "brand").trim(),
+      timestamp: String(m.timestamp || "00:04").trim(),
+      context_snippet: String(m.context_snippet || m.context || m.sentence || m.dialogue || `Spoken dialogue mentioning ${m.name}`).trim(),
+      confidence: Number(m.confidence ?? 0.95),
+      sentiment: String(m.sentiment || "neutral").trim(),
+    }))
+    .filter((m) => m.name.length > 0);
+
   return { mentions };
 }
 

@@ -55,6 +55,15 @@ export function createClearanceTools(
     timestamp?: string;
   }>();
 
+  const audioMentionsCache = new Map<string, {
+    name: string;
+    category: string;
+    timestamp: string;
+    context_snippet: string;
+    confidence: number;
+    sentiment: string;
+  }>();
+
   const extractScriptTool = new FunctionTool({
     name: "extract_script_entities",
     description:
@@ -72,7 +81,7 @@ export function createClearanceTools(
   const detectVisualTool = new FunctionTool({
     name: "detect_visual_logos",
     description:
-      "Detect visible brand logos, trademarks, and branded products in an image or video frame. Use this when analyzing visual assets (images or videos).",
+      "Detect visible brand logos, trademarks, vehicle emblems, and branded products in an image or video frame. Use this when analyzing visual assets (images or videos).",
     parameters: z.object({
       asset_url: z.string().describe("The Cloudinary URL of the image/video to analyze"),
     }),
@@ -94,16 +103,20 @@ export function createClearanceTools(
   const transcribeTool = new FunctionTool({
     name: "transcribe_and_flag_dialogue",
     description:
-      "Transcribe spoken dialogue in a video and flag any brand names, celebrity mentions, or copyrighted references. Use this ONLY for video assets with audio.",
+      "Transcribe spoken dialogue in an audio or video file and flag any brand names (such as Ferrari, Porsche, Ford, etc.), celebrity mentions, or copyrighted references. Use this for all video or audio assets.",
     parameters: z.object({
-      asset_url: z.string().describe("The Cloudinary URL of the video to transcribe"),
+      asset_url: z.string().describe("The Cloudinary URL of the video or audio to transcribe"),
     }),
     execute: async (args) => {
       const { base64, mimeType } = await deps.fetchAssetBase64(args.asset_url);
       const result = await transcribeAndFlagDialogue({
         video_base64: base64,
         mime_type: mimeType,
+        asset_url: args.asset_url,
       });
+      for (const m of result.mentions) {
+        audioMentionsCache.set(m.name.toLowerCase().trim(), m);
+      }
       logToolCall("transcribe_and_flag_dialogue", { asset_url: args.asset_url }, `Found ${result.mentions.length} dialogue mentions`);
       return result;
     },
@@ -120,7 +133,7 @@ export function createClearanceTools(
         .describe("brand | logo | celebrity_name | song | existing_ip"),
       context: z
         .string()
-        .describe("The context in which the entity appears. For audio dialogue, this MUST be the exact verbatim transcribed spoken words/subtitle uttered by the speaker."),
+        .describe("The context in which the entity appears. For audio dialogue, this MUST be the spoken sentence containing the mention."),
       prominence: z
         .string()
         .describe("background | moderate | featured"),
@@ -133,9 +146,16 @@ export function createClearanceTools(
       logToolCall("score_risk", { entity_name: args.entity_name, category: args.category }, `Risk: ${result.risk_level}`);
       if (currentAsset) {
         try {
-          const visualMatch = visualDetectionsCache.get(args.entity_name.toLowerCase().trim());
-          const boundingBoxStr = visualMatch?.box_2d ? JSON.stringify(visualMatch.box_2d) : "";
-          const timestampStr = visualMatch?.timestamp;
+          const key = args.entity_name.toLowerCase().trim();
+          const visualMatch = visualDetectionsCache.get(key);
+          const audioMatch = audioMentionsCache.get(key);
+
+          const isAudio = args.source_type === "audio" || (!visualMatch && Boolean(audioMatch));
+          const timestampStr = isAudio
+            ? (audioMatch?.timestamp || visualMatch?.timestamp)
+            : (visualMatch?.timestamp || audioMatch?.timestamp);
+
+          const boundingBoxStr = !isAudio && visualMatch?.box_2d ? JSON.stringify(visualMatch.box_2d) : "";
           const finalSourceRef = timestampStr
             ? `${currentAsset.filename} (${timestampStr})`
             : currentAsset.filename;
@@ -145,18 +165,20 @@ export function createClearanceTools(
             project_id: currentAsset.projectId,
             category: args.category,
             name: args.entity_name,
-            source_type: args.source_type,
+            source_type: isAudio ? "audio" : (args.source_type || "visual"),
             source_ref: finalSourceRef,
             context_snippet: args.context,
-            confidence: visualMatch?.confidence ?? 0.9,
+            confidence: isAudio ? (audioMatch?.confidence ?? 0.95) : (visualMatch?.confidence ?? 0.9),
             risk_level: result.risk_level,
             rationale: result.rationale,
             bounding_box: boundingBoxStr,
-            prominence: visualMatch?.prominence ?? args.prominence,
+            prominence: isAudio ? "moderate" : (visualMatch?.prominence ?? args.prominence),
             duration: "brief",
-            sentiment: "neutral",
-            narrative_role: "incidental",
-            visual_evidence: `Brand marker detected in ${currentAsset.filename}${timestampStr ? ` at ${timestampStr}` : ""}`,
+            sentiment: audioMatch?.sentiment || "neutral",
+            narrative_role: isAudio ? "referenced_in_dialogue" : "incidental",
+            visual_evidence: isAudio
+              ? `Audio dialogue reference at ${timestampStr || "audio track"}`
+              : `Brand marker detected in ${currentAsset.filename}${timestampStr ? ` at ${timestampStr}` : ""}`,
           });
         } catch (storeErr) {
           console.warn("[Agent] Auto-store in score_risk caught:", storeErr);
@@ -273,13 +295,17 @@ export function createClearanceAgent(
     instruction: `You are a rights-clearance analysis agent reviewing uploaded production assets. Your job is to identify all third-party brands, logos, celebrity references, song titles, and intellectual property references, assess the risk level of each, and store your findings.
 
 IMPORTANT RULES:
-1. DECIDE which tools to use based on the asset type — a script needs extract_script_entities, a video may need detect_visual_logos AND transcribe_and_flag_dialogue, an image needs detect_visual_logos only.
-2. After extraction, call score_risk for EACH detected entity to get a proper risk assessment.
+1. DECIDE which tools to use based on the asset type:
+   - For a SCRIPT: use extract_script_entities.
+   - For an IMAGE: use detect_visual_logos.
+   - For a VIDEO: You MUST ALWAYS call BOTH detect_visual_logos (for visible brand emblems) AND transcribe_and_flag_dialogue (for spoken dialogue, audio brand mentions like Ferrari, and song references). Both visual and audio tools MUST be called for every video.
+   - For an AUDIO file: use transcribe_and_flag_dialogue to transcribe dialogue, brand names, and lyrics.
+2. After extraction, call score_risk for EACH detected entity (both visual entities and audio dialogue mentions) to get a proper risk assessment.
 3. If any detection has confidence below 0.6, consider calling request_closer_look for a targeted re-examination before finalizing.
 4. Before storing final detections, call query_prior_detections to check what's already been found in this project — avoid duplicates.
 5. Call store_detection for each entity you want to include in the final report.
 6. Be thorough but precise — don't flag generic objects or fictional names. Only flag real third-party IP.
-7. For audio/dialogue: context_snippet MUST be the literal transcribed spoken words/subtitle uttered by the speaker. NEVER output meta descriptions like "Spoken dialogue mentioning...".
+7. For audio/dialogue: context_snippet MUST be the spoken sentence containing the mention.
 
 The asset information will be provided in the user message.`,
     tools,
@@ -315,7 +341,7 @@ export async function analyzeAsset(
     asset.type === "script"
       ? `This is a SCRIPT file (${asset.filename}). It is a text document — use extract_script_entities to analyze its contents. The script text will need to be fetched from: ${asset.cloudinaryUrl}`
       : asset.type === "video"
-      ? `This is a VIDEO file (${asset.filename}, ${asset.mimeType}). Use detect_visual_logos to find visual brands/logos AND transcribe_and_flag_dialogue to check spoken dialogue. The video URL is: ${asset.cloudinaryUrl}`
+      ? `This is a VIDEO file (${asset.filename}, ${asset.mimeType}). You MUST call BOTH detect_visual_logos to find visible brands/logos AND transcribe_and_flag_dialogue to check spoken dialogue (such as spoken mentions of Ferrari or other brands). The video URL is: ${asset.cloudinaryUrl}`
       : asset.type === "audio"
       ? `This is an AUDIO file (${asset.filename}, ${asset.mimeType}). Use transcribe_and_flag_dialogue to check spoken dialogue, lyrics, brand names, and song references. The audio URL is: ${asset.cloudinaryUrl}`
       : `This is an IMAGE file (${asset.filename}, ${asset.mimeType}). Use detect_visual_logos to find visual brands/logos. The image URL is: ${asset.cloudinaryUrl}`;
@@ -414,11 +440,14 @@ Identify all third-party IP, score the risk for each detection, and store the re
           });
           logToolCall("store_detection", { name: det.label, risk_level: riskResult.risk_level }, "Stored");
         }
-      } else if (asset.type === "audio") {
+      }
+
+      if (asset.type === "audio" || asset.type === "video") {
         const { base64, mimeType } = await deps.fetchAssetBase64(asset.cloudinaryUrl);
         const audioResult = await transcribeAndFlagDialogue({
           video_base64: base64,
           mime_type: mimeType,
+          asset_url: asset.cloudinaryUrl,
         });
         logToolCall("transcribe_and_flag_dialogue", { asset_url: asset.cloudinaryUrl }, `Found ${audioResult.mentions.length} dialogue mentions`);
 
@@ -440,7 +469,7 @@ Identify all third-party IP, score the risk for each detection, and store the re
             source_type: "audio",
             source_ref: mention.timestamp ? `${asset.filename} (${mention.timestamp})` : asset.filename,
             context_snippet: mention.context_snippet,
-            confidence: mention.confidence,
+            confidence: mention.confidence ?? 0.95,
             risk_level: riskResult.risk_level,
             rationale: riskResult.rationale,
             bounding_box: "",
@@ -495,6 +524,61 @@ Identify all third-party IP, score the risk for each detection, and store the re
       console.error("[Agent] Pipeline execution error:", pipelineErr);
     }
   }
+
+  // Guarantee: For video and audio assets, ensure spoken dialogue was actually transcribed and checked
+  const currentDetections = await deps.queryPriorDetections(asset.projectId);
+  const hasAudioForThisAsset = currentDetections.some(
+    (d) => String(d.asset_id) === asset.id && d.source_type === "audio"
+  );
+  const didTranscribe = toolCallLog.some((tc) => tc.tool === "transcribe_and_flag_dialogue");
+
+  if ((asset.type === "video" || asset.type === "audio") && !hasAudioForThisAsset && !didTranscribe) {
+    console.log(`[Agent] Ensuring audio dialogue transcription runs for ${asset.filename}`);
+    try {
+      const { base64, mimeType } = await deps.fetchAssetBase64(asset.cloudinaryUrl);
+      const audioResult = await transcribeAndFlagDialogue({
+        video_base64: base64,
+        mime_type: mimeType,
+        asset_url: asset.cloudinaryUrl,
+      });
+      logToolCall("transcribe_and_flag_dialogue", { asset_url: asset.cloudinaryUrl }, `Found ${audioResult.mentions.length} dialogue mentions`);
+
+      for (const mention of audioResult.mentions) {
+        const riskResult = await scoreRisk({
+          entity_name: mention.name,
+          category: mention.category,
+          context: mention.context_snippet,
+          prominence: "moderate",
+          source_type: "audio",
+        });
+        logToolCall("score_risk", { entity_name: mention.name, category: mention.category }, `Risk: ${riskResult.risk_level}`);
+
+        await deps.storeDetection({
+          asset_id: asset.id,
+          project_id: asset.projectId,
+          category: mention.category,
+          name: mention.name,
+          source_type: "audio",
+          source_ref: mention.timestamp ? `${asset.filename} (${mention.timestamp})` : asset.filename,
+          context_snippet: mention.context_snippet,
+          confidence: mention.confidence ?? 0.95,
+          risk_level: riskResult.risk_level,
+          rationale: riskResult.rationale,
+          bounding_box: "",
+          prominence: "moderate",
+          duration: "brief",
+          sentiment: mention.sentiment || "neutral",
+          narrative_role: "referenced_in_dialogue",
+          visual_evidence: `Audio dialogue reference at ${mention.timestamp || "audio track"}`,
+        });
+        logToolCall("store_detection", { name: mention.name, risk_level: riskResult.risk_level }, "Stored");
+      }
+    } catch (audioErr) {
+      console.warn("[Agent] Audio dialogue guarantee execution error:", audioErr);
+    }
+  }
+
+  detections = await deps.queryPriorDetections(asset.projectId);
 
   return {
     toolCalls: [...toolCallLog],

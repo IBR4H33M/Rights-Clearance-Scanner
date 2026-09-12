@@ -2686,7 +2686,9 @@ function EvidencePreview({
     preview?.mimeType?.startsWith('audio') ||
     preview?.filename?.match(/\.(mp3|wav|m4a|aac|flac|ogg)$/i) ||
     (detection as any).sourceType === 'audio' ||
+    detection.narrativeRole === 'referenced_in_dialogue' ||
     detection.category === 'song' ||
+    detection.visualEvidence?.toLowerCase().includes('audio') ||
     (!preview && detection.sourceRef?.toLowerCase().includes('audio'));
 
   if (isAudio) {

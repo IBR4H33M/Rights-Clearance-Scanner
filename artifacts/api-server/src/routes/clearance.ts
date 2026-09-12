@@ -284,7 +284,7 @@ router.post("/projects/:projectId/assets", async (req, res): Promise<void> => {
 
     // Upload to Cloudinary
     const resourceType =
-      assetType === "video" ? "video" : assetType === "image" ? "image" : "raw";
+      assetType === "video" || assetType === "audio" ? "video" : assetType === "image" ? "image" : "raw";
 
     const uploadResult = await cloudinaryUpload(parsed.data.contentBase64, {
       filename: parsed.data.filename,
@@ -476,12 +476,14 @@ router.post(
           const mimeMap: Record<string, string> = {
             jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
             gif: "image/gif", webp: "image/webp", mp4: "video/mp4",
-            mov: "video/quicktime", avi: "video/x-msvideo", txt: "text/plain",
-            pdf: "application/pdf",
+            mov: "video/quicktime", avi: "video/x-msvideo", webm: "video/webm",
+            mp3: "audio/mp3", wav: "audio/wav", m4a: "audio/mp4",
+            aac: "audio/aac", ogg: "audio/ogg", flac: "audio/flac",
+            txt: "text/plain", pdf: "application/pdf",
           };
           const mimeType = (headerMime && headerMime !== "application/octet-stream")
             ? headerMime
-            : mimeMap[ext] ?? "image/jpeg";
+            : mimeMap[ext] ?? (ext.match(/mp3|wav|m4a|aac|ogg|flac/i) ? "audio/mp3" : "image/jpeg");
           return { base64, mimeType };
         },
       };
