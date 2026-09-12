@@ -2718,7 +2718,7 @@ function EvidencePreview({
             Spoken Subtitle Text:
           </p>
           <p className="text-sm sm:text-base leading-relaxed text-black font-medium">
-            {cleanSubtitle.replace(/^["“']|["”']$/g, '')}
+            &quot;{cleanSubtitle.trim().replace(/^["“'”]+|["“'”]+$/g, '').trim()}&quot;
           </p>
         </div>
         {preview?.filename && (
