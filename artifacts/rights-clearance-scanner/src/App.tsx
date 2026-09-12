@@ -788,8 +788,32 @@ function ProjectReportsSection({
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      setReports((prev) => prev.filter((r) => r.id !== reportId));
-      queryClient.invalidateQueries({ queryKey: getGetProjectReportQueryKey(projectId) });
+      const remaining = reports.filter((r) => r.id !== reportId);
+      setReports(remaining);
+      const remainingLatest = remaining[0];
+      const newDetectionCount = remainingLatest
+        ? (remainingLatest.counts.high + remainingLatest.counts.medium + remainingLatest.counts.low)
+        : 0;
+
+      queryClient.setQueriesData({ queryKey: getListProjectsQueryKey() }, (oldData: any) => {
+        if (!Array.isArray(oldData)) return oldData;
+        return oldData.map((p) => {
+          if (p.id === projectId) {
+            return {
+              ...p,
+              detectionCount: newDetectionCount,
+              reportStatus: remaining.length > 0 ? 'ready' : 'not_started',
+            };
+          }
+          return p;
+        });
+      });
+
+      if (remaining.length === 0) {
+        queryClient.removeQueries({ queryKey: getGetProjectReportQueryKey(projectId) });
+      } else {
+        queryClient.invalidateQueries({ queryKey: getGetProjectReportQueryKey(projectId) });
+      }
       queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
       setReportPendingDelete(null);
     } catch (err) {
@@ -2154,7 +2178,31 @@ function ReportPage() {
       if (selectedReportId === reportToDelete.id) {
         setSelectedReportId(remaining[0]?.id ?? null);
       }
-      queryClient.invalidateQueries({ queryKey: getGetProjectReportQueryKey(projectId) });
+
+      const remainingLatest = remaining[0];
+      const newDetectionCount = remainingLatest
+        ? (remainingLatest.counts.high + remainingLatest.counts.medium + remainingLatest.counts.low)
+        : 0;
+
+      queryClient.setQueriesData({ queryKey: getListProjectsQueryKey() }, (oldData: any) => {
+        if (!Array.isArray(oldData)) return oldData;
+        return oldData.map((p) => {
+          if (p.id === projectId) {
+            return {
+              ...p,
+              detectionCount: newDetectionCount,
+              reportStatus: remaining.length > 0 ? 'ready' : 'not_started',
+            };
+          }
+          return p;
+        });
+      });
+
+      if (remaining.length === 0) {
+        queryClient.removeQueries({ queryKey: getGetProjectReportQueryKey(projectId) });
+      } else {
+        queryClient.invalidateQueries({ queryKey: getGetProjectReportQueryKey(projectId) });
+      }
       queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
       setReportToDelete(null);
     } catch (err) {

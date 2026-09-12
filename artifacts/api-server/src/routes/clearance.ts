@@ -115,10 +115,23 @@ router.get("/projects", async (req, res) => {
         const { rows: assetRows } = await queryClickHouse(
           `SELECT id, project_id, type, cloudinary_url, filename, mime_type, width, height, size_bytes, uploaded_at FROM assets WHERE project_id = '${escapeStr(projectId)}'`
         );
-        const { rows: detectionRows } = await queryClickHouse(
-          `SELECT count() as cnt FROM detections WHERE project_id = '${escapeStr(projectId)}'`
+        const { rows: latestReportRows } = await queryClickHouse(
+          `SELECT risk_high, risk_medium, risk_low, detections_json FROM reports WHERE project_id = '${escapeStr(projectId)}' ORDER BY generated_at DESC LIMIT 1`
         );
-        const detectionCount = Number(detectionRows[0]?.cnt ?? 0);
+        let detectionCount = 0;
+        if (latestReportRows.length > 0) {
+          const r = latestReportRows[0]!;
+          if (r.detections_json) {
+            try {
+              const d = JSON.parse(String(r.detections_json));
+              detectionCount = Array.isArray(d) ? d.length : 0;
+            } catch {
+              detectionCount = Number(r.risk_high ?? 0) + Number(r.risk_medium ?? 0) + Number(r.risk_low ?? 0);
+            }
+          } else {
+            detectionCount = Number(r.risk_high ?? 0) + Number(r.risk_medium ?? 0) + Number(r.risk_low ?? 0);
+          }
+        }
 
         return {
           id: projectId,
@@ -750,6 +763,46 @@ router.delete("/projects/:projectId/reports/:reportId", async (req, res): Promis
       `ALTER TABLE reports DELETE WHERE id = '${escapeStr(reportId)}' AND project_id = '${escapeStr(projectId)}'`
     );
 
+    // 3. Synchronize detections and project stats with remaining reports
+    const { rows: remainingReports } = await queryClickHouse(
+      `SELECT id, risk_high, risk_medium, risk_low, detections_json, generated_at FROM reports WHERE project_id = '${escapeStr(projectId)}' AND id != '${escapeStr(reportId)}' ORDER BY generated_at DESC`
+    );
+
+    if (remainingReports.length === 0) {
+      await executeClickHouse(
+        `ALTER TABLE detections DELETE WHERE project_id = '${escapeStr(projectId)}'`
+      );
+      await executeClickHouse(
+        `ALTER TABLE project_stats DELETE WHERE project_id = '${escapeStr(projectId)}'`
+      );
+    } else {
+      await executeClickHouse(
+        `ALTER TABLE detections DELETE WHERE project_id = '${escapeStr(projectId)}'`
+      );
+      const latestRemaining = remainingReports[0]!;
+      if (latestRemaining.detections_json) {
+        try {
+          const remainingDetections = JSON.parse(String(latestRemaining.detections_json));
+          if (Array.isArray(remainingDetections)) {
+            for (const d of remainingDetections) {
+              const bboxStr = d.boundingBox ? JSON.stringify(d.boundingBox) : "";
+              await executeClickHouse(
+                `INSERT INTO detections (id, asset_id, project_id, category, name, source_type, source_ref, context_snippet, confidence, risk_level, rationale, bounding_box, prominence, duration, sentiment, narrative_role, visual_evidence, detected_at)
+                 VALUES ('${escapeStr(String(d.id || ""))}', '${escapeStr(String(d.assetId || ""))}', '${escapeStr(projectId)}', '${escapeStr(String(d.category || "brand"))}', '${escapeStr(String(d.name || ""))}', '${escapeStr(String(d.sourceType || ""))}', '${escapeStr(String(d.sourceRef || ""))}', '${escapeStr(String(d.contextSnippet || ""))}', ${Number(d.confidence ?? 0.5)}, '${escapeStr(String(d.riskLevel || "medium"))}', '${escapeStr(String(d.rationale || ""))}', '${escapeStr(bboxStr)}', '${escapeStr(String(d.prominence || ""))}', '${escapeStr(String(d.duration || ""))}', '${escapeStr(String(d.sentiment || ""))}', '${escapeStr(String(d.narrativeRole || ""))}', '${escapeStr(String(d.visualEvidence || ""))}', '${escapeStr(String(d.detectedAt || new Date().toISOString()))}')`
+              );
+            }
+          }
+        } catch (err) {
+          console.error("Failed to restore detections for remaining report:", err);
+        }
+      }
+      const totalRemaining = Number(latestRemaining.risk_high ?? 0) + Number(latestRemaining.risk_medium ?? 0) + Number(latestRemaining.risk_low ?? 0);
+      await executeClickHouse(
+        `INSERT INTO project_stats (project_id, scans_count, total_detections, high_risk_count, medium_risk_count, low_risk_count, last_scan_at, updated_at)
+         VALUES ('${escapeStr(projectId)}', ${remainingReports.length}, ${totalRemaining}, ${Number(latestRemaining.risk_high ?? 0)}, ${Number(latestRemaining.risk_medium ?? 0)}, ${Number(latestRemaining.risk_low ?? 0)}, '${escapeStr(String(latestRemaining.generated_at))}', '${new Date().toISOString()}')`
+      );
+    }
+
     // 3. Check for any orphaned Cloudinary assets
     if (reportRows.length > 0) {
       const r = reportRows[0]!;
@@ -919,58 +972,9 @@ router.get("/projects/:projectId/report", async (req, res): Promise<void> => {
         previews: reportPreviews,
         toolCalls,
       });
-      return;
     }
 
-    // Fallback to detections table if no report record was saved yet
-    const { rows: detectionRows } = await queryClickHouse(
-      `SELECT * FROM detections WHERE project_id = '${escapeStr(projectId)}' ORDER BY detected_at`
-    );
-
-    if (detectionRows.length === 0) {
-      res.status(404).json({ error: "No report has been generated yet" });
-      return;
-    }
-
-    const counts = { low: 0, medium: 0, high: 0 };
-    const detections = detectionRows.map((d) => {
-      const riskLevel = String(d.risk_level ?? "medium");
-      if (riskLevel in counts) counts[riskLevel as keyof typeof counts]++;
-
-      const boundingBox = parseBoundingBox(d.bounding_box);
-
-      return {
-        id: String(d.id),
-        assetId: String(d.asset_id),
-        category: String(d.category ?? "brand"),
-        name: String(d.name ?? ""),
-        sourceType: String(d.source_type ?? ""),
-        sourceRef: String(d.source_ref ?? ""),
-        contextSnippet: String(d.context_snippet ?? ""),
-        confidence: Number(d.confidence ?? 0.5),
-        riskLevel,
-        rationale: String(d.rationale ?? ""),
-        boundingBox,
-        frameReference: null,
-        prominence: String(d.prominence ?? "") || null,
-        duration: String(d.duration ?? "") || null,
-        sentiment: String(d.sentiment ?? "") || null,
-        narrativeRole: String(d.narrative_role ?? "") || null,
-        visualEvidence: String(d.visual_evidence ?? "") || null,
-      };
-    });
-
-    const report = {
-      projectId,
-      generatedAt: new Date().toISOString(),
-      summary: `${detections.length} potential rights references found across ${assetRows.length} asset${assetRows.length === 1 ? "" : "s"}.`,
-      counts,
-      detections,
-      analyzedAssets: assetRows.length,
-      previews,
-    };
-
-    res.json(report);
+    res.status(404).json({ error: "No report has been generated yet" });
   } catch (err) {
     console.error("Error fetching report:", err);
     res.status(500).json({ error: "Failed to fetch report" });
